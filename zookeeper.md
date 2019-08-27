@@ -1,5 +1,12 @@
 # Zookeeper
 
+[官网](https://zookeeper.apache.org/)
+
+部署模式：
+
+* 单机
+* 集群，但是我个人认为，zookeeper都是集群的存在才有意义
+
 ## Zookeeper常用的shell命令
 
 [群起zookeeper的脚本地址](<https://blog.csdn.net/qq_31807385/article/details/84975964>)
@@ -8,12 +15,14 @@
 # 启动zookeeper服务器：
 [root@M1 /home/pyd/zookeeper-3.4.10]# ./bin/zkServer.sh 
 
-# 查看状态：
+# 关闭zookeeper服务器：
+[root@M1 /home/pyd/zookeeper-3.4.10]# ./bin/zkServer.sh stop
 
+# 查看状态：
+[root@M1 /home/pyd/zookeeper-3.4.10]# ./bin/zkServer.sh status
 
 # 启动zookeeper的客户端
 [root@M1 /home/pyd/zookeeper-3.4.10]# ./bin/zkCli.sh
-
 
 ~~~
 
@@ -66,10 +75,85 @@ ZooKeeper 系统中所有服务器都存储相同的数据，并且每次数据�
 
 ![](img/zk/5.png)
 
-zookeeper通过树状结构的方式来记录数据：
+Zookeeper全局的数据是一致的，其数据结构和类Unix的文件系统很类似，每个路径下面可以存储数据，默认存储的大小是1M：zookeeper通过树状结构的方式来记录数据：
 
 ![](img/zk/4.png)
 
 大数据集群通常都是主从架构，主服务来管理集群的状态和元数据的信息，为了防止脑裂，在运行期间只能有一个服务工作，同时为了高正高可用，必须有另外一台服务器保持热备，那么应用服务和集群中的其他服务器如何才能知道当前的那个服务器是工作的主服务器呢？所以很多的大数据系统都依赖Zookeeper来提供一致性数据服务，用于选举主服务器。一台主服务器启动之后向zookeeper注册自己为主服务器，后来向zookeeper注册的就只能是热备服务器，应用程序运行期间和主服务器通信。
 
 如果当前的主服务器宕机（zookeeper上注册的心跳数据不在更新）热备服务器通过zookeeper的监控机制发现当前工作的主服务器宕机，就想zookeeper注册自己为当前工作的主服务器，应用和集群中的其他服务器会和新的主服务器进行通信。
+
+## Zookeeper的工作机制
+
+Zookeeper的设计基于观察者模式，zookeeper集群负责存储大家都关系的数据，一旦这些数据发生了变化，zookeeper就负责通知已经在zookeeper上注册的观察者。
+
+![](img/zk/6.png)
+
+**小知识**：
+
+* Quorum：是仲裁的意思，启动zookeeper之后会有一个**QuorumPeerMain**进程。
+* Zookeeper的配置文件zoo.conf 中的两个选项：
+* dataDir，是数据文件的目录+树持久化路径，主要有用于保存zookeeper中的数据。
+* clientPort：服务器监听客户端的端口号。
+* 2888就是Leader和Follower信息交换的端口；3888 是在Leader挂了之后，用来选举的端口。
+* 2就是myid的值，myid表示的是zookeeper的编号，放置在`dataDir`所在的目录下
+* 常见的命令：
+
+~~~shell
+create /isea/gril “beauty” # 创建节点，并添加值：
+get /isea/gril # 获取节点的值：
+delte   # 删除节点
+rmr    # 递归删除节点
+~~~
+
+集群模式下，zoo.conf 中的
+
+![](img/zk/7.png)
+
+## zookeeper的内部原理
+
+### zookeeper的节点类型
+
+* 持久（Persistent）客户端和服务器建立连接值断开后，创建的节点不删除
+
+* 短暂（Ephemeral）客户端和服务器断开连接之后，创建的节点自己删除
+
+### 监听器原理
+
+![](img/zk/8.png)
+
+* 首先有一个主线程，在主线程中创建zkClient，该客户端会有两个线程，listenner和connect
+* connect线程会将注册到的监听事件发送给zookeeper
+* 在zookeeper中的监听器会将connect发送过来的事件注册到监听列表中
+* zookeeper发现注册的事件有变化的时候，会将这个消息发送给listenner
+* listenner线程调用zkcli的process方法进行相应的处理
+
+### 选举机制
+
+* 半数机制，集群中半数以上的机器存活，集群可用，所以zookeeper适合安装**奇数**台机器
+* Zookeeper在配置文件中没有指定Master和Slave，zookeeper中的Leader是通过内部选举机制完成的。
+
+* 选举机制：
+
+![](img/zk/9.png)
+
+* 服务器1启动，发起一次选举。服务器1投自己一票。此时服务器1票数一票，不够半数以上（3票），选举无法完成，服务器1状态保持为LOOKING；
+
+* 服务器2启动，再发起一次选举。服务器1和2分别投自己一票并交换选票信息：此时服务器1发现服务器2的ID比自己目前投票推举的（服务器1）大，更改选票为推举服务器2。此时服务器1票数0票，服务器2票数2票，没有半数以上结果，选举无法完成，服务器1，2状态保持LOOKING
+
+* 服务器3启动，发起一次选举。此时服务器1和2都会更改选票为服务器3。此次投票结果：服务器1为0票，服务器2为0票，服务器3为3票。此时服务器3的票数已经超过半数，服务器3当选Leader。服务器1，2更改状态为FOLLOWING，服务器3更改状态为LEADING；
+
+* 服务器4启动，发起一次选举。此时服务器1，2，3已经不是LOOKING状态，不会更改选票信息。交换选票信息结果：服务器3为3票，服务器4为1票。此时服务器4服从多数，更改选票信息为服务器3，并更改状态为FOLLOWING；
+
+* 服务器5启动，同4一样当小弟。
+
+### 写请求的实现
+
+![](img/zk/10.png) 
+
+
+
+
+
+
+
