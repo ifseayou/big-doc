@@ -35,7 +35,9 @@ scala> 1.to(6)
 res14: scala.collection.immutable.Range.Inclusive = Range(1, 2, 3, 4, 5, 6)
 ~~~
 
-### 算术和操作符号的重载
+### Chapter1
+
+#### 算术和操作符号的重载
 
 在Scala中，
 
@@ -54,7 +56,7 @@ a.方法（参数）
 */
 ~~~
 
-### Scala中的方法和函数
+#### Scala中的方法和函数
 
 函数：在Scala中，你不需要调用某个特定类的静态方法来实现类似与求平方等操作。只是需要一个导包的操作：
 
@@ -73,7 +75,7 @@ scala> BigInt.probablePrime(100,scala.util.Random)
 res23: scala.math.BigInt = 940640853769843387998341502449
 ~~~
 
-### apply方法
+#### apply方法
 
 在Scala中使用**apply**方法构建对象的手法是`scala`创建对象的常用手法
 
@@ -94,7 +96,9 @@ scala> BigInt.apply("12334")
 res28: scala.math.BigInt = 12334
 ~~~
 
-### 表达式
+### Chapter2
+
+#### 表达式
 
 ***Scala语言中的表达式是有值，有类型的。***
 
@@ -149,7 +153,111 @@ scala> for(i<-"Hello") print(i+"\t")
 H       e       l       l       o
 ~~~
 
+#### 如何break
 
+这里提供一种方法是：`scala.util.control.Breaks`
+
+#### 双层for循环
+
+~~~scala
+// 这里生成器之间要使用；隔开
+scala> for(i<-1 to 3;j <- "cat") print( i+""+ j + "\t")
+1c      1a      1t      2c      2a      2t      3c      3a      3t
+
+// 每个生成器后面可以添加守卫
+scala> for(i<-1 to 3;j <- "cat" if j != 'c') print( i+""+ j + "\t")
+1a      1t      2a      2t      3a      3t
+
+// for 循环体以yield开始的话，则该循环会构造出来一个集合
+scala> for(i <- 1 to 6) yield i % 3
+res8: scala.collection.immutable.IndexedSeq[Int] = Vector(1, 2, 0, 1, 2, 0)
+~~~
+
+#### 函数
+
+Scala处了方法，还支持函数，方法对对象进行操作，函数不是。在Java中我们只能使用静态方法来模拟函数。
+
+下面是Scala中函数的定义和使用：
+
+![](img/scala/3.png)
+
+函数的返回值类型，Scala自己会根据函数体的最后一个表达式的值来进行确定，所以不指定返回类型是很好的，除了**该函数是递归函数，如果是递归函数，必须指定该函数的返回类型**
+
+#### 默认参数
+
+![](img/scala/4.png)
+
+#### 变长参数
+
+如下例子：
+
+![](img/scala/5.png)
+
+#### 过程
+
+Scala对于不返回值的函函数叫做过程，**过程** 不返回值，调用它仅仅是为了她的副作用。例如下面的box过程例子：
+
+~~~java
+/**
+  * -------------
+  * |Hello world|
+  * -------------
+  */
+
+object ScalaGrammer {
+  def main(args: Array[String]): Unit = { // 
+    box("Hello world")
+  }
+  def box(s:String): Unit = {
+    val border = "-" * s.length + "--\n"
+    println(border + "|" + s + "|\n" + border)
+  }
+}
+~~~
+
+上面的过程是显示定义返回类型是***Unit***，下面的方式是直接省略这一过程：
+
+![](img/scala/6.png)
+
+#### Lazy懒值
+
+懒值对于开销较大的初始化语句比较有用，懒值是位于***`val`和def***的中间状态：
+
+~~~ scala
+    // 在word1定义的时候即被取值
+    val word1 = scala.io.Source.fromFile("").mkString
+    // 在words首次被使用的是时候，被取值
+    lazy val word2 = scala.io.Source.fromFile("").mkString
+
+  // 在每一次words首次使用的时候取值
+  def words = scala.io.Source.fromFile("**").mkString
+~~~
+
+### Chapter3 数组
+
+* 若长度固定使用 ***Array*** ，如果长度不固定，使用***`ArrayBuffer`***
+
+* 提供初始值的时候不要使用new
+* 使用***（）***来访问元素
+* 使用***`for(ele <-arr)`***来遍历元素
+* 使用***`for(ele<-arr if...)...yield...`*** 来讲原数组转型为新数组
+* Scala数组和java数组可以相互转化：用`ArrayBuffer`，使用`scala.collection.JavaConversions`中的转换函数。
+
+#### 定长数组
+
+Scala中的Array是Java数组方式实现的，下面例子中的Array[String] 的类型在JVM中就是`java.lang.String[]` ，Array[1,2,3] 在JVM中就是***`int[]`***
+
+![](img/scala/7.png)
+
+#### 变长数组：数组缓冲
+
+长度变化的数组在java中的是`ArrayList`，在Scala中等效是`ArrayBuffer`
+
+![](img/scala/8.png)
+
+遍历数组：
+
+![](img/scala/9.png)
 
 
 
