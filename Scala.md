@@ -377,7 +377,81 @@ val map: Map[String, Int] = pairs.toMap
 * 每个类都有一个主要的构造器，这个构造器和类定义，交织在一起，他的参数直接成为类的字段，主构造器执行类中所有的语句。
 * 辅助构造器是可选的，他们都叫***this***
 
+#### 简单类和无参方法
 
+~~~scala
+object ScalaGrammer {
+  def main(args: Array[String]): Unit = {
+    val myCounter = new Counter
+    // 对于调用无参方法，可以写上括号，也可以不写
+    myCounter.increment() // 对于改值器的方法，即改变对象状态的方法，使用()
+    println(myCounter.current) // 对于取值器的方法（不会改变对象状态的方法）去掉()
+  }
+}
+
+// 在Scala中，类并不声明为public，Scala源文件可以包含多个类，所有的这些类都具有公有可见性
+class Counter{
+  private var value = 0 // 你必须初始化字段
+  def increment() = {value += 1 }
+
+  def current() = value
+  def cur = value // 可以使用通过不带()的方法声明current来强制以上的风格
+}
+~~~
+
+#### `getX和setX`
+
+```scala
+class Person{
+  var age = 0 // 必须初始化
+}
+
+// scala在生成面向JVM的类的啥时候，其中有一个私有的age字段和相应的getter和setter方法
+// 这两个方法是公有的，因为我们没有将age声明为private，对私有的字段来说，getter和setter
+// 方法是私有的。scala中的getter和setter叫做：age 和 age_=
+
+/**
+  * 如果字段是私有的，则getter和setter方法也是私有的
+  * 如果字段是val，则只有getter方法被生成
+  */
+```
+
+#### 只带getter属性
+
+如果属性的值在对象构建完成之后就不在改变，则可以使用***`val`***字段，
+
+~~~scala
+class Message{
+  val date = new java.util.Date
+  // scala会生成一个私有的final字段和一个getter方法，没有setter
+}
+~~~
+
+**Scala中，方法可以访问该类的所有对象的私有字段，和java一样。**
+
+~~~scala
+class Counter{
+  private var value = 0
+  def increment() {value += 1}
+  def isLess(other:Counter) = value < other.value
+  // 可以访问另外一个对象的私有字段
+}
+~~~
+
+很多Java工具有依赖setter和getter的命名习惯，如果想要这样的方法：
+
+~~~scala
+class Person{
+  @BeanProperty var name :String = _
+  /**
+    * 会生成：
+    *       name
+    *       name_=
+    *       getName()
+    *       setName()
+    */
+}
+~~~
 
 
 
