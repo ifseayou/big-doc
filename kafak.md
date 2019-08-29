@@ -41,6 +41,14 @@ broker接收来自生产者的消息，为消息设置偏移量，并提交到�
 log.dirs #Kafka将所有的消息都保存在了磁盘上，保存的位置通过其指定
 ~~~
 
+## 源码分析
+
+### 生产者源码：
+
+![](img/kfk/10.png)
+
+具体的源码在IDEA中使用了bookmarks进行了标准。
+
 
 
 ## Producer
@@ -122,7 +130,17 @@ Kafka生产者组件
   	Topic: first	Partition: 0	Leader: 3	Replicas: 3,1,2	Isr: 3,2,1
   	Topic: first	Partition: 1	Leader: 1	Replicas: 1,2,3	Isr: 3,2,1
   	Topic: first	Partition: 2	Leader: 2	Replicas: 2,3,1	Isr: 3,2,1
+  	
+  
+  # 进入zookeeper（也就是进入zookeeper的cli之后），
+  ls /consumers  # 即可看到消费者组的信息
+  console-consumer-2912
+  
+  # 然后可以在kafka中查看数据的偏移量
+  bin/kafka-consumer-offset-checker.sh --zookeeper hadoop101:2181 --group console-consumer-2912
   ~~~
+
+
 
 `ISR (In Sync Replication)` 正在同步的副本，3,2，2 表示的是这三者都在同步副本。
 
