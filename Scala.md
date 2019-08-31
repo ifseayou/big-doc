@@ -453,6 +453,81 @@ class Person{
 }
 ~~~
 
+#### 辅助构造器
+
+* 辅助构造器的名字是***this***
+* 每一个辅助构造器都由其他辅助构造器或者是主构造器开始
+
+#### 主构造器
+
+下面是一个java类：
+
+```java 
+public class PersonJ {
+    private String name;
+    private int age;
+    public PersonJ(String name,int age){
+        this.name = name;
+        this.age = age;
+    }
+    public String nage(){return name;}
+    public int age(){return age;}
+}
+```
+
+Scala只需要下面的代码就能搞定
+
+~~~scala 
+class PersonS(val name:String,val age :Int){ // 注意这里是val，是没有set方法的
+}
+~~~
+
+Scala中，每一个类都有主构造器，***主构造器和类交织在一起***。
+
+~~~scala
+class PersonS(val name:String,val age :Int){
+  print("PersonS is coming...")
+  // print语句是主构造器的一部分，每当有对象被构造出来的时候，上述的代码就会被执行
+  // 当你需要在构造的过程中配置某个字段的时候，特别有用
+}
+~~~
+
+通常可以通过在主构造器中使用默认参数来避免过多的使用辅助构造器。
+
+~~~scala
+class Person(val name:String="",val age:Int=0)
+~~~
+
+**在Scala中，类也接收参数，就像方法一样。** 如果构造参数不带`val`或`var`的参数至少被一个方法使用，她将被升为字段。否则，该参数将不被保存为字段，仅仅是一个可以被主构造器访问的普通参数。
+
+~~~java
+class Person(name:String,age:Int){
+    def description = name + " is " + age + " years old.."
+}
+// 上述代码声明并初始化了不可变字段name和age，这两个字段都是对象私有的。
+~~~
+
+![](img/scala/13.png)
+
+这里如果是`val`就没有setter方法，如果是`var`就有setter方法，都是公有的
+
+~~~scala
+object ScalaGrammer {
+  def main(args: Array[String]): Unit = {
+    val person = new Person("xiaomi",23)
+    person.name _= "zhangfei" // 这里由于name是val，所以没有set方法，无法通过编译
+    println(person)
+  }
+}
+class Person(val name:String,var age :Int){}
+~~~
+
+
+
+
+
+
+
 
 
 

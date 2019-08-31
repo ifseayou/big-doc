@@ -49,6 +49,44 @@ log.dirs #Kafka将所有的消息都保存在了磁盘上，保存的位置通�
 
 具体的源码在IDEA中使用了bookmarks进行了标准。
 
+## Kafka Connect
+
+[参考链接](<https://howtoprogram.xyz/2016/07/10/apache-kafka-connect-example/>)
+
+### 是什么？
+
+> ***Apache Kafka Connect*** supports us to quickly define connectors that move large collections of data from other systems into Kafka and from Kafka to other systems.
+
+### 怎么玩？
+
+https://howtoprogram.xyz/2016/07/10/apache-kafka-connect-example/  这里的例子写的很好了。
+
+Kafka Connect 是一种模块化组件，提供了一种非常强大的集成方法。一些关键组件包括：
+
+- 连接器——定义如何与数据存储集成的 JAR 文件；
+- 转换器——处理数据的序列化和反序列化；
+- 变换——可选的运行时消息操作。
+
+Kafka Connect 中的连接器负责从源数据存储（例如数据库）获取数据，并以数据内部表示将数据传给转换器。然后，Kafka Connect 的转换器将这些源数据对象序列化到主题上。
+
+![](img/kfk/11.png)
+
+在使用 Kafka Connect 作为接收器时刚好相反——转换器将来自主题的数据反序列化为内部表示，传给连接器，以便能够使用特定于目标的适当方法将数据写入目标数据存储。
+
+![](img/kfk/12.png)
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 ## Producer
