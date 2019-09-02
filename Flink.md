@@ -1,5 +1,13 @@
 # `Flink`
 
+[参考的地址](<https://confucianzuoyuan.github.io/flink-tutorial/>)
+
+`Flink`的几大模块：
+
+* `Flink `Table & SQL(还没开发完)
+* `Flink Gelly`(图计算)
+* `Flink `CEP(复杂事件处理)
+
 **`Flink`是一个框架和一个分布式处理引擎，用于对无界或者有界数据流进行状态计算。**
 
 原本是德国的项目，约在14年的时候代码捐赠给了apache基金会，`flink`在德语中有快速灵活的意思。

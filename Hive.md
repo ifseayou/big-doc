@@ -24,7 +24,104 @@ Hive只是和数据库在SQL语句上有着类似之处，only。
 * Hive的数据都是存储在HDFS上，而数据库的数据是存储在磁盘中的
 * 数据是需要经常需要updata，和Insert的，而hive读多写少，hive中的数据基本都是在加载的时候确定好的
 * hive是没有索引的，查询就是全表扫描，但是可以做到多台机器并并处理，而数据库可以建立索引，在数据量不大的情形下，索引能够很快的相应出数据
-* 
+
+~~~shell
+# 创建两个文件夹
+[isea@hadoop110 hadoop-2.7.2]$ bin/hadoop fs -mkdir /tmp
+[isea@hadoop110 hadoop-2.7.2]$ bin/hadoop fs -mkdir -p /user/hive/warehouse
+
+# 查看HDFS上的文件路径
+[isea@hadoop110 hadoop-2.7.2]$ bin/hadoop fs -ls /
+Found 2 items
+drwxr-xr-x   - isea supergroup          0 2019-09-02 07:52 /tmp
+drwxr-xr-x   - isea supergroup          0 2019-09-02 07:53 /user
+
+# 在HDFS上创建/tmp和/user/hive/warehouse两个目录并修改他们的同组权限可写
+[isea@hadoop110 hadoop-2.7.2]$ bin/hadoop fs -chmod g+w /tmp/
+[isea@hadoop110 hadoop-2.7.2]$ bin/hadoop fs -chmod g+w /user/hive/warehouse  # 这里修改的是warehouse这个目录的权限
+~~~
+
+![](img/had/14.png)
+
+Hive中默认就只有一个库：***default*** ，该库下面没有任何的表。
+
+## Hive的shell操作
+
+~~~shell
+# 启动hive：
+[isea@hadoop110 apache-hive-1.2.1-bin]$ bin/hive
+
+# 创建一张stu表，并尝试插入数据：
+hive> create table stu(id int,name string);
+OK
+Time taken: 0.971 seconds
+hive> show tables;
+OK
+stu
+Time taken: 0.019 seconds, Fetched: 1 row(s)
+
+# 插入数据的时候执行MR程序
+hive> insert into stu values(1,"zhangfei");
+Query ID = isea_20190902081329_62a50ed8-42e0-4444-9b31-b5fe0a67fbae
+Total jobs = 3
+Launching Job 1 out of 3
+Number of reduce tasks is set to 0 since there's no reduce operator
+Starting Job = job_1567381834182_0001, Tracking URL = http://hadoop111:8088/proxy/application_1567381834182_0001/
+Kill Command = /opt/module/hadoop-2.7.2/bin/hadoop job  -kill job_1567381834182_0001
+Hadoop job information for Stage-1: number of mappers: 1; number of reducers: 0
+2019-09-02 08:13:46,043 Stage-1 map = 0%,  reduce = 0%
+2019-09-02 08:13:57,524 Stage-1 map = 100%,  reduce = 0%, Cumulative CPU 3.43 sec
+MapReduce Total cumulative CPU time: 3 seconds 430 msec
+Ended Job = job_1567381834182_0001
+Stage-4 is selected by condition resolver.
+Stage-3 is filtered out by condition resolver.
+Stage-5 is filtered out by condition resolver.
+Moving data to: hdfs://hadoop110:9000/user/hive/warehouse/stu/.hive-staging_hive_2019-09-02_08-13-29_878_3657628842568788435-1/-ext-10000
+Loading data to table default.stu
+Table default.stu stats: [numFiles=1, numRows=1, totalSize=11, rawDataSize=10]
+MapReduce Jobs Launched: 
+Stage-Stage-1: Map: 1   Cumulative CPU: 3.43 sec   HDFS Read: 3540 HDFS Write: 78 SUCCESS
+Total MapReduce CPU Time Spent: 3 seconds 430 msec
+OK
+Time taken: 30.265 seconds
+
+# 删除该表，删除之后，在HDFS上就没有该表的数据了
+hive> drop table stu;
+OK
+Time taken: 0.987 seconds
 
 
+~~~
+
+该表在HDFS上面的存在形式和路径：
+
+![](img/hive/2.png)
+
+### 将本地文件加载到Hive的案例
+
+将本地的`/opt/module/datas/studnet.txt`这个目录下的数据导入到hive的`student(id int,name string)`表中
+
+~~~shell
+#
+[isea@hadoop110 hive]$ pwd
+/opt/module/datasource/hive
+
+[isea@hadoop110 hive]$ vim student.txt  # 这里以tab键作为分隔符号
+1001	z3
+1002	l4
+1003	w5
+
+# 创建student表，并且声明文件分隔符号'\t'
+hive> create table student(id int ,name string) row format delimited fields terminated by '\t';
+
+# 加载数据到student的数据表
+hive> load data local inpath '/opt/module/datasource/hive/student.txt' into table student;
+Loading data to table default.student
+Table default.student stats: [numFiles=1, totalSize=24]
+OK
+Time taken: 0.355 seconds
+
+# 可以发现这样加载数据的方式比起直接插入要快很多，因为不需要走MR。
+
+~~~
 

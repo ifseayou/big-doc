@@ -53,13 +53,128 @@ log.dirs #Kafka将所有的消息都保存在了磁盘上，保存的位置通�
 
 [参考链接](<https://howtoprogram.xyz/2016/07/10/apache-kafka-connect-example/>)
 
+### 数据管道
+
+数据管道：实时的生产者和基于批处理的消费者可以同时存在，`kafka`的解耦的特点`kafka`的回压策略：在必要的时候，可以延后向生产者发送确认。多数系统允数据丢失，不过大多数情况下，他们要求有至少一次传递，也即源系统的每一个事件都需要到达目的地，不过有时候需要进行重试，而重试可能造成数据重复消费。
+
+Kafka本身就可以保证**至少一次传递**，Connect API 为继承外部系统提供了处理偏移量的API，连接器因此可以构建仅一次穿日的端到端的数据管道。实际上很多的开源的连接器都支持仅一次传递。
+
+在向Kafka写入数据或者从Kafka读取数据的时候，要么使用传统的生产者或者是消费者客户端，要么使用Connect API和连接器。什么使用适用哪一个？
+
+Kafka的客户端是要嵌入到应用程序之中的，应用程序使用他们想Kafka写入数据或从Kafka读取数据，如果你是开发人员，你会使用Kafka Client将应用程序连接到Kafka，并修改应用程序的代码，将数据推送到Kafka或者从Kafka读取数据。
+
+如果要将Kafka连接到数据存储系统，可以使用Connect，因为这些系统不是你开发的，你不能也不想修改他们的代码。Connect可以用于从外部存储系统读取数据，或者将数据推送到外部存储系统，如果数据存储系统提供了相应的连接器，那么非开发人员就可以用过配置连接器的方式来实现Connect。如果你要连接的存储系统没有相应的连接器，那么可以考虑使用客户端API或者是Connect API开发一个应用程序，建议首先使用Connect，因为他提供了：配置管理，偏移量管理，并行处理，错误处理，还支持多种数据类型和标准的REST管理API。
+
+***Kafka Connect为连接器插件提供了一组API和一个运行时，Connect负责运行这些插件，他们负责移动数据。***Connect以worker进程集群的方式 运行，我们基于worker进行安装连接器插件，连接器启动额外的task，有效利用工作节点的资源，以并行的方式移动大量的数据。
+
+数据源的连接器负责从源系统读取数据，并把数据对象提供给work进程。数据池的连接器负责从work进程获取数据，并把他们写入目标系统。
+
+可以使用数据池将多个主题写入一个文件，而一个数据源只允许被写入一个主题。
+
+
+
 ### 是什么？
 
 > ***Apache Kafka Connect*** supports us to quickly define connectors that move large collections of data from other systems into Kafka and from Kafka to other systems.
 
 ### 怎么玩？
 
+#### 例子
+
 https://howtoprogram.xyz/2016/07/10/apache-kafka-connect-example/  这里的例子写的很好了。
+
+#### 配置文件
+
+connect进程配置，connect（worker）为连接器插件（connector）提供运行时。
+
+```shell
+bootstrap.servers=localhost:9092   # 列出了将要与Connect协同工作的broker服务器，连接器将会从这些broker写入数据，或者是从那里读取数据。
+#group.id = isea # 具有相同的id的worker属于同一个connect集群，集群的连接器和他们的任务可以运行在任意一个worker上
+key.converter=org.apache.kafka.connect.json.JsonConverter  # Connect可以处理储存在kafka里的不同格式的数据，这里指定了消息的key所使用的转换器，默认使用Kafka提供的Jsonconverter
+value.converter=org.apache.kafka.connect.json.JsonConverter
+key.converter.schemas.enable=true
+value.converter.schemas.enable=true
+```
+
+source配置
+
+~~~shell
+name=local-file-source  # connector-source的名字
+connector.class=FileStreamSource  # connector-source使用的类
+tasks.max=1   # connector source启动的task最大个数
+file=test.txt  # 源文件地址，该地址如果是相对地址，默认从kafka开始找
+topic=connect-test  # 送往kafka的主题
+~~~
+
+sink的配置
+
+~~~shell
+name=local-file-sink  # connector-sink的名字
+connector.class=FileStreamSink  # connector-sink使用的类
+tasks.max=1  # connector-sink启动到的最大的task的个数
+file=test.sink.txt  # 应该写入的地址，相对于kafka目录
+topics=connect-test  # 源主题
+~~~
+
+#### 关于connect的shell命令：
+
+~~~shell
+#在使用connect之前，要保证zookeeper和kafka在运行状态：
+/home/pyd/kafka_2.11-1.0.0  # 保证在kafka的目录下：
+
+# 启动zookeeper
+./bin/zookeeper-server-start.sh config/zookeeper.properties &
+
+# 启动kafka
+./bin/kafka-server-start.sh config/server.properties
+
+# 启动source和sink connectors  standalone方式启动
+./bin/connect-standalone.sh config/connect-standalone.properties config/connect-file-source.properties config/connect-file-sink.properties
+
+./bin/connect-standalone.sh config/connect-distributed.properties config/connect-file-source.properties config/connect-file-sink.properties
+
+# 在启动了worker之后，可以通过REST API验证他们是否正常运行
+curl http://localhost:8083
+{"version":"1.0.0","commit":"aaa7af6d4a11b29d"}
+
+# 检查已经安装好的连接器插件：
+curl http://localhost:8083/connector-plugins
+[{"class":"org.apache.kafka.connect.file.FileStreamSinkConnector","type":"sink","version":"1.0.0"},{"class":"org.apache.kafka.connect.file.FileStreamSourceConnector","type":"source","version":"1.0.0"}]
+~~~
+
+### 深入connect原理
+
+如果要理解Connect的工作原理，要知道三个基本概念，以及他们之间如何进行交互，这里需要
+
+#### 连接器和任务
+
+连接器插件实现了Connect API，API包含了两部分内容 ，
+
+##### 连接器
+
+连接器负责三件事：
+
+* 决定需要运行多少个任务
+
+* 按照任务来拆分数据复制
+
+* **从worker进程获取任务配置并将其传递下去，**
+
+  例如JDBC连接器会连接到数据库，统计需要复制的数据表，并确定需要执行多少个任务，然后在配置参数max.tasks和数据量之间选择较小的那个作为任务数。在确定了任务数之后，连接器会为每个任务生成一个配置，配置里包含了连接器的配置项和该任务需要复制的数据表.`taskConfig()`返回一个映射列表，这些映射包含了任务的相关配置，worker进程负责启动和配置任务，每个任务只复制配置项里指定的数据表。
+
+##### 任务
+
+任务负责将数据移入或者移出Kafka，任务在初始化的时会得到一个由worker进程分配的一个上下文。原系统上下文（`Source Context`) 包含了一个对象，可以将源系统记录的偏移量保存在上下文里，（例如，文件连接器的偏移量就是文件里的字节位置，JDBC连接器的偏移量就是数据表的主键ID）。目标系统连接器的上下文提供了一些方法，可以用他们操作从Kafka接收到的数据，比如进行数据清洗，错误重试，或者偏移量保存到外部系统**以便实现仅一次传递** 。***任务在初始化之后，就开始按照连接器指定的配置（包含在一个properties对象里面）启动工作。源任务系统对外部系统进行轮询，并返回一些记录，worker进程将这些记录发往Kafka。数据池任务通过worker进程接收来自Kafka的记录，并将他们写入外部系统。***
+
+#### worker进程
+
+worker进程是连接器和任务的 **“容器”**。他们负责处理HTTP请求，这些请求应用于定义连接器和连接器的配置，他们还负责保存连接器的配置，启动连接器和连接器任务，并把配置信息传递给任务。
+
+
+
+
+
+
 
 Kafka Connect 是一种模块化组件，提供了一种非常强大的集成方法。一些关键组件包括：
 
@@ -91,15 +206,120 @@ Kafka Connect 中的连接器负责从源数据存储（例如数据库）获取
 
 ## Producer
 
-Kafka生产者组件
+下面的代码都是使用单线程的生产者，生产者其实是可以使用多线程来发送消息的，，刚开始的时候可以使用单个消费者单个线程，如果需要增加吞吐，可以增加多个线程，如果还不够，增加多个消费者。
+
+### Kafka生产者组件
 
 ![](img/kfk/4.png)
 
 
 
+* 这里的`ProducerRecord`是对象，生产者要将`ProducerRecord`对象序列化为字节数组，然后才能在网络上传输。
+* 数据传递给分区器之后，如果之前在`ProducerRecord`对象里指定了分区，分区器不会做任何事情，如果没有指定分区，那么分区器会根据`ProducerRecord`的键来选择一个分区。选好分区，生产者就知道往哪个主题哪个分区发送数据了。
+* 接着，这条记录被添加到一个记录批次里，这个批次里的所有消息会被发送到相同的主题和分区上，有一个独立的线程负责把这些记录批次发送到相应的broker上
+* 服务器在收到这些消息的时候会给一个相应，如果消息写入Kafka成功，就返回一个`RecordMetaData`,它包含了主题和分区信息，以及**记录在分区里的偏移量**，如果失败会尝试重新发送消息，几次之后如果还是失败，就返回错误信息
+
+### 配置准备
+
+~~~java
+//创建配置对象
+Properties properties = new Properties();
+
+//设置kafka集群，必须的参数
+properties.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG,"hadoop101:9092");
+
+//序列化 ，必须的参数，必须实现：org.apache.kafka.common.serialization.Serializer接口的类
+properties.setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,"org.apache.kafka.common.serialization.StringSerializer");
+properties.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,"org.apache.kafka.common.serialization.StringSerializer");
+
+// 缓冲区的大小，默认是32M,生产者使用它缓冲发送到服务器的消息，如果生产过快，send()方法要么被组塞，要么爆出异常
+properties.setProperty(ProducerConfig.BUFFER_MEMORY_CONFIG,"33554432");
+
+//配置应答机制，等待所有的副本节点的应答，该参数指定了必须有多少分区副本收到消息，生产者才会消息写入是成功的
+properties.setProperty(ProducerConfig.ACKS_CONFIG,"all");
+
+// 当生产者发送失败的时候，允许最大尝试的次数，如果达到这个次数，生产者会放弃尝试，并返回错误，每次尝试之间的时间间隔是：retry.backoff.ms(默认100ms)
+properties.setProperty(ProducerConfig.RETRIES_CONFIG,"0");
+
+// 当有多个消息需要被发送到一同一个分区的时候，生产者会将他们放在同一个批次里，当批次填满，批次里的消息会被发送出去，半满的批次或者只有一个消息的
+// 批次也有可能被发送出去，这里这是16k
+properties.setProperty(ProducerConfig.BATCH_SIZE_CONFIG,"16384");
+
+// 指定生产者在发送消息批次之前等待更多的消息加入到批次的时间，生产者会在批次被填满或者是linger.ms达到上限的时候把消息发送出去。
+properties.setProperty(ProducerConfig.LINGER_MS_CONFIG,"10");
+
+// 指定分区类：
+properties.setProperty(ProducerConfig.PARTITIONER_CLASS_CONFIG,"com.isea.learn.kafka.partition.VirginPartition");
+
+//创建生产者 从这里开始看kafka的源码，可以看到所有的准备工作
+Producer<String,String> producer = new KafkaProducer<String, String>(properties);
+
+//准备数据
+String topic = "first";
+String value = "iseayou,you are so handsome...";
+// kafka的生产者，会将发送的数据封装成ProducerRecord对象
+ProducerRecord<String, String> record = new ProducerRecord<String, String>(topic,value);
+~~~
+
+### 发送消息
+
+生产者发送消息的方式主要有三种：
+
+* fire-and-forget 把消息发送给服务器，并不担心是否正常到达，多数情况下会正常到达，因为Kafka是高可用的，而且生产者会自动尝试重发（retries参数配置） 不过这种方式有时候也会丢失数据。当我们不关心发送结果，可以使用这种方式，比如记录不太重要的应用程序日志。
+
+~~~java
+try {
+    producer.send(record); // 这个是异步的方法
+}catch (Exception e){
+    e.printStackTrace();
+}
+~~~
+
+* 同步发送，使用send()方法发送，返回一个Future对象，调用get()方法进行等待，就知道消息是否发送成功。如果服务器返回错误，get()方法会爆出以异常，没有发生异常，我们会得到一个`RecordMetadata`对象，可以用它获取消息的偏移量。
+
+~~~java
+try {
+    producer.send(record).get(); // 这个是同步的方法
+}catch (Exception e){
+    e.printStackTrace();
+}
+~~~
+
+* 异步发送，使用send()方法发送，并可以指定回调函数，服务器在返回相应的时候，调用该函数。假设在Kafka集群和应用程序之间一个来回需要10ms，如果在发送完每个消息后都等待回应，那么发送100个消息需要1s。多数情况下，我们并不需要等待响应，尽管Kafka会把目标主题，分区信息，消息的偏移量发送回来，但其实这对应用程序来说并不是必须的。但是在消息发送失败时，我们需要抛出异常：
+
+~~~java
+producer.send(record,(metadata,ex)->{
+    if (ex != null){
+        ex.printStackTrace();
+    }
+});
+~~~
+
+### 顺序保证
+
+如果对消息的顺序有严格的要求，不建议把retries设非零，同时把max.inflight.requests.per.connection设置为1。后者指定了生产者收到服务器响应之前可以发送多少个消息，设为1可以保证消息是按照发送的数据写入服务器的，即便发生了重试。
+
+### 分区
+
+* 如果key为null 而且使用了默认的分区器，分区器会使用轮询（Round Robin）算法将消息均衡的分布到各个主题上
+
+* 如果key不为null，而且使用了默认的分区器，那么Kafka会对key进行散列，然后根据散列值将消息映射到分特定的分区上。
+
+
+
+
+
+
+
+
+
 刚开始，G1群组里有C1，C2等消费者，如果新增一个消费者群组G2，两个消费者组订阅了相同的主题T1，那么G2会接收T1的所有的消息。
 
-### Consumer消费者
+
+
+
+
+## Consumer消费者
 
 **消息轮询是消费者API的核心**，通过一个简单的轮询向服务器请求出具，一旦消费者订阅了主题，轮询就会处理所有的细节，包扩群组协调，分区再均衡，发送心跳和获取数据。总的来说G2还是会消费所有的信息，不管有么有其他的群组的存在。
 
@@ -108,6 +328,49 @@ Kafka生产者组件
 流式数据：没有边界的数据。
 
 事件事件：事件时间指的是所追踪事件发生时间和记录的创建时间。0.10.0 之后生产者会自动在记录中添加记录的创建时间，那么如果Kafka的记录是基于事件发生之后数据库记录创建的怎么办？需要自己设置时间戳字段了。
+
+## 集群配置
+
+~~~shell
+broker.id=0   # broker的全局唯一编号
+
+# 删除topic功能使能
+delete.topic.enable=true
+
+#处理网络请求的线程数量
+num.network.threads=3
+
+#用来处理磁盘IO的现成数量
+num.io.threads=8
+
+# The maximum size of a request that the socket server will accept (protection against OOM)
+socket.request.max.bytes=104857600
+
+# Kafka运行日志存放的路径
+log.dirs=
+
+# topic在当前broker上的分区个数
+num.partitions=1
+
+# 用来恢复和清理data下数据的线程数量
+num.recovery.threads.per.data.dir=1
+
+offsets.topic.replication.factor=1
+transaction.state.log.replication.factor=1
+transaction.state.log.min.isr=1
+log.retention.hours=168
+log.segment.bytes=1073741824
+ an optional chroot string to the urls to specify the
+# root directory for all kafka znodes.
+zookeeper.connect=localhost:2181
+
+# Timeout in ms for connecting to zookeeper
+zookeeper.connection.timeout.ms=6000
+~~~
+
+
+
+
 
 ## `kafka` 的命令行命令
 
@@ -567,6 +830,29 @@ public class TestLowConsumer {
     }
 }
 ~~~
+
+## 深入`kafka`
+
+### 集群成员关系
+
+Kafka通过zookeeper来维护集群成员的信息，在broker启动的时候通过创建**临时节点**把自己的id注册到zookeeper中，Kafka组件订阅**`zookeeper的/brokers/ids`** 。
+
+### 控制器
+
+其实就是一个broker，复杂分区leader的选取，第一个启动的broker通过在zookeeper中创建**临时节点/controller**，其他节点启动的时候也尝试创建该节点，但是他们会收到**“节点已存在”**的异常，然后其他的broker会在控制器节点上创建zookeeper watch对象，来接收该节点变更的通知。
+
+Kafka通过zookeeper的零时节点来选举控制器，并在节点新加入或退出时通知控制器，使用epoch来避免脑裂（两个节点同时认为自己是当前的控制器）
+
+### 复制
+
+复制功能是Kafka的核心。副本有两种类型：
+
+* 首领副本
+* 跟随者副本
+
+
+
+
 
 ## 为什么`Kafka`能够实现高吞吐？
 

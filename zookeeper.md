@@ -13,18 +13,116 @@
 
 ~~~shell
 # 启动zookeeper服务器：
-[root@M1 /home/pyd/zookeeper-3.4.10]# ./bin/zkServer.sh 
+[root@M1 /home/pyd/zookeeper-3.4.10]# ./bin/zkServer.sh start
 
 # 关闭zookeeper服务器：
 [root@M1 /home/pyd/zookeeper-3.4.10]# ./bin/zkServer.sh stop
 
 # 查看状态：
 [root@M1 /home/pyd/zookeeper-3.4.10]# ./bin/zkServer.sh status
-
+Mode:standalone  # 这里表示的是standalone模式，单节点
+ 
 # 启动zookeeper的客户端
 [root@M1 /home/pyd/zookeeper-3.4.10]# ./bin/zkCli.sh
 
+###############在zookeeper中的相关命令##################
+# 查看znode中包含的节点，ls2表示的是获取节点的详细信息
+[zk: localhost:2181(CONNECTED) 3] ls /
+[zookeeper]
+
+# 获取到节点的值
+[zk: localhost:2181(CONNECTED) 4] get /zookeeper
+
+cZxid = 0x0
+ctime = Thu Jan 01 08:00:00 CST 1970
+mZxid = 0x0
+mtime = Thu Jan 01 08:00:00 CST 1970
+pZxid = 0x0
+cversion = -1
+dataVersion = 0
+aclVersion = 0
+ephemeralOwner = 0x0
+dataLength = 0
+numChildren = 1 # 表示当前的节点是/ 有一个子节点
 ~~~
+
+### 临时节点
+
+zookeeper中的节点有两种类型：
+
+* 持久节点：客户端和服务器端断开连接后，创建的节点不删除
+* 短暂节点：客户端和服务器断开之后，创建的节点自己删除 `create -e`
+
+~~~shell
+[zk: localhost:2181(CONNECTED) 6] create /number "数字"   # 创建数字
+Created /number
+[zk: localhost:2181(CONNECTED) 7] ls /     # 可以看见数据的的变化           
+[number, zookeeper]
+
+# 创建一个临时的节点，并查看
+[zk: localhost:2181(CONNECTED) 8] create -e /number/one "1"
+Created /number/one
+[zk: localhost:2181(CONNECTED) 9] get /number/one
+1
+cZxid = 0x100000007
+ctime = Sun Sep 01 09:01:21 CST 2019
+mZxid = 0x100000007
+mtime = Sun Sep 01 09:01:21 CST 2019
+pZxid = 0x100000007
+cversion = 0
+dataVersion = 0
+aclVersion = 0
+ephemeralOwner = 0x6cea44f22b0001
+dataLength = 1
+numChildren = 0  # 可以查看当前的节点的子节点
+
+# 退出之后在登录，ls /number 没有结果
+[zk: localhost:2181(CONNECTED) 0] ls /number
+[]
+~~~
+
+### 监听节点变化
+
+这里演示，监听节点路径的变化，监听节点的值的变化
+
+~~~shell
+# 监听节点值的变化，使用get
+[zk: localhost:2181(CONNECTED) 1] get /number watch
+数字
+cZxid = 0x100000006
+ctime = Sun Sep 01 08:59:41 CST 2019
+mZxid = 0x100000006
+mtime = Sun Sep 01 08:59:41 CST 2019
+pZxid = 0x100000008
+cversion = 2
+dataVersion = 0
+aclVersion = 0
+ephemeralOwner = 0x0
+dataLength = 6
+numChildren = 0
+[zk: localhost:2181(CONNECTED) 2] 
+WATCHER::
+
+WatchedEvent state:SyncConnected type:NodeDataChanged path:/number  # 该部分是下面的代码执行了之后的结果
+
+# 修改值
+[zk: localhost:2181(CONNECTED) 6] set /number "数字大爆发"
+
+
+# 监听路径的变化
+[zk: localhost:2181(CONNECTED) 3] ls /number watch
+[]
+[zk: localhost:2181(CONNECTED) 4]   # 该部分是下面的代码执行了之后的结果
+WATCHER::
+
+WatchedEvent state:SyncConnected type:NodeChildrenChanged path:/number
+
+# 增加路径
+[zk: localhost:2181(CONNECTED) 8] create /number/one "one"
+Created /number/one
+~~~
+
+
 
 ## 分布式系统一致性
 
