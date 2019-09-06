@@ -176,6 +176,42 @@ curl http://localhost:8083/connector-plugins
 [{"class":"org.apache.kafka.connect.file.FileStreamSinkConnector","type":"sink","version":"1.0.0"},{"class":"org.apache.kafka.connect.file.FileStreamSourceConnector","type":"source","version":"1.0.0"}]
 ~~~
 
+#### Kafka connect to mysql
+
+本例子介绍将`Kafka`中的主题数据导入到MySQL中：为了`kafka`主题中的数据格式的正确，先将MySQL的数据导入到Kafka，然后在将该数据导入`mysql`的表中：
+
+:one: 下载 `confluentinc-kafka-connect-jdbc-5.3.0.zip` [地址:](<https://www.confluent.io/hub/confluentinc/kafka-connect-jdbc>) 解压到指定的文件夹，且在 `connect-distributed.properties`配置文件指定plugin的地址
+
+:two: 将MySQL的驱动放置到上述plugin的位置，也就是驱动要和`kafka-connect-jdbc` 处于同级目录，这很重要
+
+:three:  创建数据库和数据表，并添加数据，启动分布式connect ，
+
+:four:  ~~~
+
+~~~shell
+curl -X POST -H 'Content-Type: application/json' -i 'http://localhost:8083/connectors' --data '{"name":"load-mysql-data","config":{"connector.class":"JdbcSourceConnector","connection.url":"jdbc:mysql://localhost:3306/connector?user=root&password=isea","mode":"timestamp","validate.non.null":"false","timestamp.column.name":"login_time","table.whitelist":"login","mode":"timestamp","topic.prefix": "mysql."}}'
+
+# 会得到如下的相应：
+HTTP/1.1 201 Created
+Date: Wed, 04 Sep 2019 16:46:13 GMT
+Location: http://localhost:8083/connectors/load-mysql-data
+Content-Type: application/json
+Content-Length: 328
+Server: Jetty(9.2.22.v20170606)
+
+{"name":"load-mysql-data","config":{"connector.class":"JdbcSourceConnector","connection.url":"jdbc:mysql://localhost:3306/connector?user=root&password=isea","mode":"timestamp","validate.non.null":"false","timestamp.column.name":"login_time","table.whitelist":"login","topic.prefix":"mysql.","name":"load-mysql-data"},"tasks":[]}
+
+
+# 启动消费者，查看主题中是否有数据
+isea@hadoop110 kafka_2.11-0.11.0.2]$ ./bin/kafka-console-consumer.sh --bootstrap-server hadoop110:9092 --topic mysql.login --from-beginning
+{"schema":{"type":"struct","fields":[{"type":"string","optional":true,"field":"username"},{"type":"int64","optional":true,"name":"org.apache.kafka.connect.data.Timestamp","version":1,"field":"login_time"}],"optional":false,"name":"login"},"payload":{"username":"isea","login_time":1567615404000}}
+
+~~~
+
+
+
+
+
 ### 深入connect原理
 
 如果要理解Connect的工作原理，要知道三个基本概念，以及他们之间如何进行交互，这里需要
