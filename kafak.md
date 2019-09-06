@@ -33,13 +33,23 @@ Kafka的数据单元被称作是消息，消息由字节数组组成，Kafka有�
 
 broker接收来自生产者的消息，为消息设置偏移量，并提交到磁盘保存
 
-偏移量是一种元数据，他是不断递增的整数值，在创建消息的时候，Kafka会将其添加到消息里面。在给定的分区中每个消息的偏移量都是唯一的。
+偏移量是一种元数据，他是不断递增的整数值，在创建消息的时候，Kafka会将其添加到消息里面。在给定的分 区中每个消息的偏移量都是唯一的。
 
 消费者将每个分区最后读取到的消息偏移量都保存在Zookeeper或者是Kafka上，如果消费者关闭或者重启，她的读读取状态不会丢失。
 
 ~~~properties
 log.dirs #Kafka将所有的消息都保存在了磁盘上，保存的位置通过其指定
 ~~~
+
+延迟和吞吐量之间是要做出权衡的，对于Kafka来说，单批次的数据量越大，也就是吞吐量大，虽然相对于单个消息进行传输而言，网络的开销更小，但是这样做也意味着更高的延迟。
+
+***偏移量*** 是另外一种元数据，是一个不断递增的整数值，在创建消息的时候，Kafka会把它添加到消息里，在给定的分区里，它的每个消息的偏移量都是唯一的。消费者把每个分区最后读取到的消息偏移量都保存到Zookeeper或者是Kafka中，如果消费者关闭或者是重启，她的读取状态不会丢失。
+
+broker接收来自生产者的消息，为消息设置偏移量，并提交消息到磁盘保存；同时，broker为消费者提供服务，对读取分区的请求作出相应，返回已经提交到磁盘的消息。
+
+保留消息，要么保留一段时间（比如七天），要么保留消息到达一定大小的字节数（比如1G），当消息达到这些上限的时候，旧消息就会被删除 ，所以在任何时刻，可用的消息的总量都不会超过配置参数指定的大小。
+
+
 
 ## 源码分析
 
@@ -55,13 +65,13 @@ log.dirs #Kafka将所有的消息都保存在了磁盘上，保存的位置通�
 
 ### 数据管道
 
-数据管道：实时的生产者和基于批处理的消费者可以同时存在，`kafka`的解耦的特点`kafka`的回压策略：在必要的时候，可以延后向生产者发送确认。多数系统允数据丢失，不过大多数情况下，他们要求有至少一次传递，也即源系统的每一个事件都需要到达目的地，不过有时候需要进行重试，而重试可能造成数据重复消费。
+数据管道：实时的生产者和基于批处理的消费者可以同时存在，`kafka`的解耦的特点`kafka`的回压策略：在必要的时候，可以延后向生产者发送确认。多数系统允数据丢失，没什么要紧的，不过大多数情况下，他们要求有至少一次传递，也即源系统的每一个事件都需要到达目的地，不过有时候需要进行重试，而重试可能造成数据重复消费。
 
-Kafka本身就可以保证**至少一次传递**，Connect API 为继承外部系统提供了处理偏移量的API，连接器因此可以构建仅一次穿日的端到端的数据管道。实际上很多的开源的连接器都支持仅一次传递。
+Kafka本身就可以保证**至少一次传递**，Connect API 为继承外部系统提供了处理偏移量的API，连接器因此可以构建仅一次传递的端到端的数据管道。实际上很多的开源的连接器都支持仅一次传递。
 
 在向Kafka写入数据或者从Kafka读取数据的时候，要么使用传统的生产者或者是消费者客户端，要么使用Connect API和连接器。什么使用适用哪一个？
 
-Kafka的客户端是要嵌入到应用程序之中的，应用程序使用他们想Kafka写入数据或从Kafka读取数据，如果你是开发人员，你会使用Kafka Client将应用程序连接到Kafka，并修改应用程序的代码，将数据推送到Kafka或者从Kafka读取数据。
+Kafka的客户端是要嵌入到应用程序之中的，应用程序使用他们向Kafka写入数据或从Kafka读取数据，如果你是开发人员，你会使用Kafka Client将应用程序连接到Kafka，并修改应用程序的代码，将数据推送到Kafka或者从Kafka读取数据。
 
 如果要将Kafka连接到数据存储系统，可以使用Connect，因为这些系统不是你开发的，你不能也不想修改他们的代码。Connect可以用于从外部存储系统读取数据，或者将数据推送到外部存储系统，如果数据存储系统提供了相应的连接器，那么非开发人员就可以用过配置连接器的方式来实现Connect。如果你要连接的存储系统没有相应的连接器，那么可以考虑使用客户端API或者是Connect API开发一个应用程序，建议首先使用Connect，因为他提供了：配置管理，偏移量管理，并行处理，错误处理，还支持多种数据类型和标准的REST管理API。
 
@@ -115,6 +125,30 @@ tasks.max=1  # connector-sink启动到的最大的task的个数
 file=test.sink.txt  # 应该写入的地址，相对于kafka目录
 topics=connect-test  # 源主题
 ~~~
+
+#### 例子2
+
+:one: 先启动分布式connect
+
+~~~shelll
+[root@M1 /home/pyd/kafka_2.11-1.0.0]# bin/connect-distributed.sh config/connect-distributed.propertie
+~~~
+
+:two:把文件中的内容写到Kafka的主题上去：
+
+~~~shell
+echo '{"name":"from-kafka-to-file","config":{"connector.class":"FileStreamSink","file":"output1","topic":"kafka-config-topic"}}' | curl -X POST -d @- http://localhost:8083/connectors --header "content-Type:application/json"
+~~~
+
+:three:把`kafka`主题上的信息写到文件中：
+
+~~~shell
+echo '{"name":"dump-kafka-config","config":{"connector.class":"FileStreamSink","file":"copy-of-server-properties","topics":"kafka-config-topic"}}' | curl -X POST -d @- http://localhost:8083/connectors --header "content-Type:application/json"
+~~~
+
+
+
+
 
 #### 关于connect的shell命令：
 

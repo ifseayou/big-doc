@@ -27,6 +27,30 @@ YARN服务：
 
 HDFS的块大小：HDFS的文件在物理上是分块，存储的，默认是128M，块大小的设置，不能太大也不能太小，如果太小，程序总是在寻址（寻找块的开始位置），如果设置的太大磁盘传输的时间太长。总结：**HDFS的块大小主要取决于磁盘的传输效率**。HDFS在数据的读写的时候，要先找到目标数据，然后在进行读写操作，找到该文件如果需要10ms，寻址时间为传输时间的1%的时候，为最佳状态，所以磁盘的传输数据的时间为1S，而磁盘的传输速度为100M/S，所以块大小也就是128M。能够使得传输的速率达到最佳状态。
 
+## `NameNode`的操作命令
+
+~~~shell
+# 创建两个文件夹
+[isea@hadoop110 hadoop-2.7.2]$ bin/hadoop fs -mkdir /tmp
+[isea@hadoop110 hadoop-2.7.2]$ bin/hadoop fs -mkdir -p /user/hive/warehouse
+
+# 查看HDFS上的文件路径
+[isea@hadoop110 hadoop-2.7.2]$ bin/hadoop fs -ls /
+Found 2 items
+drwxr-xr-x   - isea supergroup          0 2019-09-02 07:52 /tmp
+drwxr-xr-x   - isea supergroup          0 2019-09-02 07:53 /user
+~~~
+
+如下：
+
+![](img/had/13.png)
+
+
+
+
+
+
+
 ## HDFS
 
 ### HDFS的组成架构
