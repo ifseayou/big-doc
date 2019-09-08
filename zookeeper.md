@@ -9,7 +9,45 @@
 
 ## Zookeeper常用的shell命令
 
-[群起zookeeper的脚本地址](<https://blog.csdn.net/qq_31807385/article/details/84975964>)
+[群起zookeeper的脚本地址](<https://blog.csdn.net/qq_31807385/article/details/84975964>) 这个是自己写的，有点冗余，下面是改进之后的版本：
+
+~~~shell
+#!/bin/bash
+case $1 in
+"start"){
+   for i in hadoop104 hadoop105 hadoop106
+   do
+                 echo "----------启动$i zk----------"
+                 ssh $i "/opt/module/zookeeper-3.4.10/bin/zkServer.sh start"
+   done
+};;
+"stop"){
+   for i in hadoop104 hadoop105 hadoop106
+   do
+                echo "----------关闭$i zk----------"
+                ssh $i "/opt/module/zookeeper-3.4.10/bin/zkServer.sh stop"
+   done
+};;
+"status"){
+   for i in hadoop104 hadoop105 hadoop106
+   do
+                 echo "----------查看$i zk----------"
+                ssh $i "/opt/module/zookeeper-3.4.10/bin/zkServer.sh status"
+   done
+};;
+esac
+
+~~~
+
+以上的命令并不会起作用，因为没有读取到环境变量，有两种解决方案，第一种是手动**source**（在ssh之后）一下**`/ect/profile`** 文件，第二种方案就是配置该环境变量到当前用户的环境变量目录下，**`~/.bashrc`** 文件中
+
+~~~shell
+[isea@hadoop104 zkData]$ cat /etc/profile >> ~/.bashrc
+[isea@hadoop105 zkData]$ cat /etc/profile >> ~/.bashrc
+[isea@hadoop106 zkData]$ cat /etc/profile >> ~/.bashrc
+~~~
+
+如此一来，该脚本就能够使用了。
 
 ~~~shell
 # 启动zookeeper服务器：

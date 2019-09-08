@@ -42,6 +42,8 @@ bin/flume-ng agent -c conf/ -n a1 –f job/flume-netcat-logger.conf -Dflume.root
 --name a1	   # ：表示给agent起名为a1
 --conf-file  job/flume-netcat.conf   # ：flume本次启动读取的配置文件是在job文件夹下的flume-telnet.conf文件。
 -Dflume.root.logger==INFO,console  # ：-D表示flume运行时动态修改flume.root.logger参数属性值，并将控制台日志打印级别设置为INFO级别。日志级别包括:log、info、warn、error。
+
+# 启动之后会有一个Application的进程
 ~~~
 
 ### Channel选择器：
@@ -52,10 +54,74 @@ Flume中channel的数据是完整的数据，如果一个channel对应了多个s
 
 Channel selector 可以让不同的项目日志通过不同的Channel到不同的sink中去，有两种Channel选择器：
 
-* Replicating Channel Selector ：会将source过来的events发往所有的Channel
-* Multiplexing Channel Selector ：可以选择应该发往哪些Channel
+* Replicating Channel Selector ：会将source过来的events发往所有的**Channel**
+* Multiplexing Channel Selector ：可以选择（是否匹配上）应该发往哪些**Channel**
 
+### Flume的项目经验
 
+#### Source
 
+:one:Taildir Source相比Exec Source、Spooling Directory Source的优势
 
+* TailDir Source：断点续传、多目录。Flume1.6以前需要自己自定义Source记录每次读取文件位置，实现断点续传。(所谓的断点续传指的就是记录每次读取文件的位置，下次在读的时候，可以从该处读取数据)
+
+* Exec Source可以实时搜集数据，但是在Flume不运行或者Shell命令出错的情况下，数据将会丢失。这样的方式相当于我们使用linux命令：`tail -f filename` 一旦shell出错，数据将会丢失。
+
+* Spooling Directory Source监控目录，不支持断点续传。如果挂掉的话，会导致数据的重复
+
+#### batchSize大小如何设置？
+
+Event 1K左右时，500-1000合适（默认为100）
+
+#### Channel
+
+采用Kafka Channel，省去了Sink，提高了效率。也即如果下一级是Kafka的话，直接使用了就OK。
+
+在Flume中可以做轻微的数据清洗工作，譬如说判断数据的完整性（大括号开头，大括号结尾的Json数据格式）
+
+下面介绍一个Flume的配置文件，如何写，这里使用的是数据仓库中使用的配置文件：
+
+~~~properties
+# 组件的定义
+a1.sources=r1
+a1.channels=c1 c2
+
+# configure source
+a1.sources.r1.type = TAILDIR
+# source的类型
+a1.sources.r1.positionFile = /opt/module/flume-1.7.0/test/log_position.json
+# 记录日志读取的位置
+a1.sources.r1.filegroups = f1
+a1.sources.r1.filegroups.f1 = /tmp/logs/app.+
+# 读取日志的位置
+
+a1.sources.r1.fileHeader = true
+a1.sources.r1.channels = c1 c2
+
+#interceptor 拦截器
+a1.sources.r1.interceptors =  i1 i2
+a1.sources.r1.interceptors.i1.type = com.isea.flume.interceptor.LogETLInterceptor$Builder
+a1.sources.r1.interceptors.i2.type = com.isea.flume.interceptor.LogTypeInterceptor$Builder
+
+# 选择器，multiplexing 选择性的发送到channel，默认是replicating
+a1.sources.r1.selector.type = multiplexing
+a1.sources.r1.selector.header = topic
+a1.sources.r1.selector.mapping.topic_start = c1
+a1.sources.r1.selector.mapping.topic_event = c2
+
+# configure channel
+a1.channels.c1.type = org.apache.flume.channel.kafka.KafkaChannel
+a1.channels.c1.kafka.bootstrap.servers = hadoop104:9092,hadoop105:9092,hadoop106:9092
+# 该主题kafka会自动创建
+a1.channels.c1.kafka.topic = topic_start
+a1.channels.c1.parseAsFlumeEvent = false
+# 发送到kafka的时候，不在event的前面拼接主题名
+a1.channels.c1.kafka.consumer.group.id = flume-consumer
+
+a1.channels.c2.type = org.apache.flume.channel.kafka.KafkaChannel
+a1.channels.c2.kafka.bootstrap.servers = hadoop104:9092,hadoop105:9092,hadoop106:9092
+a1.channels.c2.kafka.topic = topic_event
+a1.channels.c2.parseAsFlumeEvent = false
+a1.channels.c2.kafka.consumer.group.id = flume-consumer
+~~~
 

@@ -345,20 +345,135 @@ def distinct(numPartitions: Int) (implicit ord: Ordering[T] = null): RDD[T] = wi
  }
  ~~~
 
-该算子是有shuffle的过程的。
-
- 
+该算子是有shuffle的过程的，该算子的作用是去重。
 
 #### Reparation 和 coalesce算子
 
 Reparation一定会进行shuffle，但是coalesce算子不一定会进行shuffle过程。
 
- 
-
-**def** repartition(numPartitions: Int)(**implicit** ord: Ordering[T] = **null**): RDD[T] = withScope {
- coalesce(numPartitions, shuffle = **true**)
+ ~~~scala
+def repartition(numPartitions: Int)(implicit ord: Ordering[T] = null): RDD[T] = withScope {
+ coalesce(numPartitions, shuffle = true)
  }
-
- 
+ ~~~
 
 #### sortBy算子：
+
+SortBy 对传入的函数处理之后的结果，对原数据进行排序。
+
+![](img/spk/31.png)
+
+**关于Shuffle的特别说明：**
+
+调用的shuffle的算子的时候，会涉及到数据的重组（聚合的时候会发生重新分区），数据的重组会涉及到跨Executor（跨机器）的操作，所以会有数据落盘的操作，体现出来就是分成不同的阶段。
+
+#### reduceByKey和groupByKey的区别：
+
+reduceByKey在shuffle之前会有一个预聚合，groupByKey按照key分组，直接进行shuffle、 
+
+#### aggregateByKey的用法
+
+![](img/spk/32.png)
+
+这里有三个参数，初始值（第一次遇见这个key的时候，给定的初始值），分区内的聚合规则，分区间的聚合规则。上面的例子是，分区内求最大，分区间求和的操作。FoldByKey用于分区间和分区内的规则一样的时候。
+
+#### CombineByKey
+
+的初始值是可以写逻辑的，而不再是一个单纯的初始值，计算相同key’累加之后的和：
+
+![](img/spk/33.png)
+
+#### Join和cogroup算子
+
+Join大约的等于内连接，cogroup大约等于外连接。
+
+#### aggregateByKey和aggregate算子的区别 + fold：
+
+第一个是转换算子，剩余两个是执行算子。![](img/spk/34.png)
+
+第一个函数将RDD中得数据放入到累加器，每个节点都是在Executor中累加的，所以第二个函数用来将两个累加器相加。Aggregate在分区之间，也会使用到初始值。![](img/spk/35.png)
+
+## Spark中的Shuffle有哪几种？
+
+有两种，**`hashshuffle ， sortshuffle`**，而hashshuffle还分为未经优化的shuffle 和优化过的**`hashshuffle`** ，假设接下来的讨论每一个Executor都只有一个CPU核 
+
+### 未经优化的HashShuffle：
+
+![](img/spk/36.png)
+
+上图中有两个Executor，每一个Executor中有两个Task，一共有四个Task，而reduce端有三个Task；假设我们的四个任务形成一个文件的话，这里会涉及到Executor之间的网络交互，而且reduce端的task在读取数据的时候就很不方便（不知道自己应该读那段的数据）；所以此时会让每一个Task形成三个文件，如此一来reduce端的task就可以读取对应文件的数据了。而且这里还会开辟对应的缓冲区。我们来思考一下这里会存在什么样子的问题？开辟的缓冲区太多；由于每一个Task要形成三个文件，需要形成很多的小文件，文件比较小的时候，打开文件和关闭文件都需要消耗资源。下一个Stage的task有多少个，当前的stage的每一个task就要创建多个磁盘文件，比如当前下一个stage有100个task，那么当前stage的每个task就要创建100个磁盘文件。
+
+### 优化后的HashShuffle
+
+并不是每一个Task产生下一个stage中task个数的文件，而是每一个Executor会产生和下一个stage相同的task个数的文件。如此一来也就减少了小文件的个数，
+
+![](img/spk/37.png)
+
+### 普通的SortShuffle
+
+sort就是排序的意思，也就是形成的文件会有序的存在，既然文件中的数据是有序存在，那么就可以和成一个文件（也就可以使用和Kafka的分段日志类似的原理进行数据的存储）（在上面我们提到过，前一个Stage，具体就是shuffleMapTask进行数据的写，写的话形成indexFile, 和dataFile，一个是索引，一个是数据，两个合在一起Task（ResultTask）就知道了应该去哪里读数据）
+
+![](img/spk/38.png)
+
+### Bypass 的 sortShuffle
+
+两者的区别和reparation和coalesce的区别差不多，Bypass 一定会sort，而sortShuffle不一定会进行sort，比如说任务少的时候，没有必要合成一个大文件，这里会有一个阈值，如果没有达到了阈值（默认是200），就是HashShuffle。
+
+## Spark的内存管理
+
+Spark为什么那么快，基于内存的计算，Spark可以使用java和scala，都是基于JVM的语言，JVM非常的强大，能够做到很好的跨平台性，这是JVM好的地方，但是JVM也有不好的地方，比如GC，以为没有办法手动控制GC，这是有JVM托管的（比如你写完了程序，内存占用的太多了，想要释放一下内存，不允许System.GC）。假设我们现在发现我们的Spark的任务执行的差不多了，可是还有一小部分没有执行完，可是内存不够用了，但是我发现内存中有一个地方可以回收，我想回收这部分内存然后去执行剩下的程序，但是想要回收，jvm可不会马上回收，也就是说这部分内存不受到Spark的控制，有10G的任务，想把内存释放10个G，然后去执行任务，做不到，可能会发生OOM，因为实际内存没有被回收，而你以为你回收了，因为Spark不知道JVM什么时候释放的内存。发生在Executor计算的时候。Spark是如何解决这个问题的呢？
+
+Spark设计了非堆内存。Spark来管理这部分内存和JVM的堆内存没有关系。这里是非堆泛指不是JVM管理的内存。也可以理解为JVM委托OS来分配内存。可以利用C语言和C++的指针的特定，定位到内存的位置，进行内存的管理。优点是不仅仅是对于内存的管理更加方便，而且性能也有一定的提升（因为普通的应用想要把对象保存在os层的话，需要进行一个序列化的操作，但是如果在OS层的话，是不存在对象的概念的，直接就是序列化的文件。）
+
+:o: **逃逸分析 **：
+
+一般的，我们new出来的对象，我们放置在堆内存中，但是我们也可以将对象放置在栈中（如果该对象只是在方法里面使用了，方法外面没有被人用，也就是意味着这个对象的生命周期只和方法有关，那么就不需要将对象放置在堆里面，而是放在栈中）因为放在栈中的对象，方法用完了，会自动弹出，对象也就被释放了 。但是我们怎么知道对象在方法的外面有没有被用（被引用）呢？ 也即对象的引用有没有逃到方法的外面去，如果在方法的外面还拿到了对象的引用。 那么就不能放在栈里面，这个过程可以在编译的时候分析出来。这个性能会更高。
+
+对于Spark的JVM的堆内内存，Spark会将其分为**存储内存和执行内存**，存储内存主要用于RDD的缓存（例如cache和persist），而在shuffle过程中计算需要的内存被划分为执行内存。
+
+###  静态内存管理
+
+对于Spark的堆内内存，一开始的Spark是这样分配的：
+
+![](img/spk/39.png)
+
+但是如今，这种内存分配的方式已经不再使用了，**RDD是存放在Other中的，cache之后的数据放置在了Storage中的**，由于Other中的数据可能存在内存碎片，所以在构建cache的时候，将Other中的数据复制到Storage中的时候，有一个展开unroll的操作（有点类似于JVM中的复制算法，GC之后复制到1区）连续之后，性能就会有提升。老的版本中存储区和计算区是不能逾越的。
+
+### 动态内存管理：
+
+![](img/spk/40.png)
+
+此时存储内存和计算内存 可以相互占用。
+
+![](img/spk/41.png)
+
+eviction：驱逐，赶出。第二图中指的意思是执行内存的内存被存储内存占用了，最后满了，但是执行内存也需要进行计算的时候，会对存储内存占用的内存进行驱逐（对于非memory only的可以落盘），看哪些内存可以释放，将其释放掉。第三个图：不会对占用内存进行回收。所以此时存储内存只能溢写磁盘，或者是释放数据。
+
+#### 堆外内存的静态和动态：
+
+![](img/spk/42.png)![](img/spk/43.png)
+
+
+
+## cache，persist，checkpoint
+
+会被重复使用的，但是不是很大的RDD，可以做cache，cache只是使用memory，也就是说RDD之间的血缘关系很长的时候，可以做cache，或者是checkpoint，如果做成了cache的话，在执行计算的时候，我们可以直接从cache 的位置获取数据，而不是从头开始计算。如果进行持久化checkpoint了的话，即便宕机之后，依然能够从某一个中间位置获取RDD的数据。
+
+***cache 不会截断血缘关系，但是checkpoint会截断血缘关系。***
+
+`rdd.persist（StorageLevel.DISK_ONLY）`和checkpoint的区别是，前者将RDD的partition持久化到磁盘，但是该partition交给blockManager去管理，一旦driver 执行结束，也就是`CoarseGrainedExecutorBackend `结束，blockManager也就会结束，那么被cache到磁盘上的RDD也就会清空。但是checkpoint会持久化到HDFS或者是本地文件，必须要手动remove掉。
+
+由于cache数据存放在堆内存的存储内存中，即便不断电也会不安全，在cache在memory only的情况下，而且占用了计算内存，而计算内存要对内存进行回收的话，cache就会被回收掉，因此cache不能切断血缘关系。
+
+## Spark的调优策略 ：
+
+### 给足资源
+
+提交作业的时候，给更过的资源使用driver-memory ； Executor-memory  num-Executors等。
+
+### RDD的优化
+
+![](img/spk/44.png)
+
+### 广播变量
+
