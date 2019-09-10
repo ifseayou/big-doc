@@ -77,9 +77,9 @@ Event 1K左右时，500-1000合适（默认为100）
 
 采用Kafka Channel，省去了Sink，提高了效率。也即如果下一级是Kafka的话，直接使用了就OK。
 
-在Flume中可以做轻微的数据清洗工作，譬如说判断数据的完整性（大括号开头，大括号结尾的Json数据格式）
+在Flume中可以做轻微的数据清洗工作，譬如说判断数据的完整性（大括号开头，大括号结尾的Json数据格式）下面介绍一个Flume的配置文件，如何写，这里使用的是数据仓库中使用的配置文件：
 
-下面介绍一个Flume的配置文件，如何写，这里使用的是数据仓库中使用的配置文件：
+##### 配置文件案例1
 
 ~~~properties
 # 组件的定义
@@ -124,4 +124,92 @@ a1.channels.c2.kafka.topic = topic_event
 a1.channels.c2.parseAsFlumeEvent = false
 a1.channels.c2.kafka.consumer.group.id = flume-consumer
 ~~~
+
+##### 配置文件案例2
+
+~~~properties
+## 组件
+a1.sources=r1 r2
+a1.channels=c1 c2
+a1.sinks=k1 k2
+
+## source1
+a1.sources.r1.type = org.apache.flume.source.kafka.KafkaSource
+a1.sources.r1.batchSize = 5000
+a1.sources.r1.batchDurationMillis = 2000
+a1.sources.r1.kafka.bootstrap.servers = hadoop104:9092,hadoop105:9092,hadoop106:9092
+a1.sources.r1.kafka.topics=topic_start
+
+## source2
+a1.sources.r2.type = org.apache.flume.source.kafka.KafkaSource
+a1.sources.r2.batchSize = 5000
+a1.sources.r2.batchDurationMillis = 2000
+a1.sources.r2.kafka.bootstrap.servers = hadoop104:9092,hadoop105:9092,hadoop106:9092
+a1.sources.r2.kafka.topics=topic_event
+
+## channel1
+a1.channels.c1.type = file
+a1.channels.c1.checkpointDir = /opt/module/flume-1.7.0/checkpoint/behavior1
+a1.channels.c1.dataDirs = /opt/module/flume-1.7.0/data/behavior1/
+a1.channels.c1.maxFileSize = 2146435071
+a1.channels.c1.capacity = 1000000
+a1.channels.c1.keep-alive = 6
+
+## channel2
+a1.channels.c2.type = file
+a1.channels.c2.checkpointDir = /opt/module/flume-1.7.0/checkpoint/behavior2
+a1.channels.c2.dataDirs = /opt/module/flume-1.7.0/data/behavior2/
+a1.channels.c2.maxFileSize = 2146435071
+a1.channels.c2.capacity = 1000000
+a1.channels.c2.keep-alive = 6
+
+## sink1
+a1.sinks.k1.type = hdfs
+a1.sinks.k1.hdfs.path = /origin_data/gmall/log/topic_start/%Y-%m-%d
+a1.sinks.k1.hdfs.filePrefix = logstart-
+a1.sinks.k1.hdfs.round = true
+a1.sinks.k1.hdfs.roundValue = 10
+a1.sinks.k1.hdfs.roundUnit = second
+
+##sink2
+a1.sinks.k2.type = hdfs
+a1.sinks.k2.hdfs.path = /origin_data/gmall/log/topic_event/%Y-%m-%d
+a1.sinks.k2.hdfs.filePrefix = logevent-
+a1.sinks.k2.hdfs.round = true
+a1.sinks.k2.hdfs.roundValue = 10
+a1.sinks.k2.hdfs.roundUnit = second
+
+## 不要产生大量小文件，在企业开发中设置为1小时，或者是128M，满足其一即可将tmp文件滚动生成文件
+a1.sinks.k1.hdfs.rollInterval = 10
+a1.sinks.k1.hdfs.rollSize = 134217728
+a1.sinks.k1.hdfs.rollCount = 0
+
+a1.sinks.k2.hdfs.rollInterval = 10
+a1.sinks.k2.hdfs.rollSize = 134217728
+a1.sinks.k2.hdfs.rollCount = 0
+
+## 控制输出文件是原生文件。
+a1.sinks.k1.hdfs.fileType = CompressedStream 
+a1.sinks.k2.hdfs.fileType = CompressedStream 
+
+a1.sinks.k1.hdfs.codeC = lzop
+a1.sinks.k2.hdfs.codeC = lzop
+
+## 拼装
+a1.sources.r1.channels = c1
+a1.sinks.k1.channel= c1
+
+a1.sources.r2.channels = c2
+a1.sinks.k2.channel= c2
+~~~
+
+启动flume：
+
+~~~shell
+nohup /opt/module/flume-1.7.0/bin/flume-ng agent --conf-file /opt/module/flume-1.7.0/jobs/kafka-flume-hdfs.conf --name a1 -Dflume.root.logger=INFO,LOGFILE >/opt/module/flume-1.7.0/log.txt   2>&1 &
+~~~
+
+flume在消费Kafka的数据的时候，两者之间是相互通信的，要先启动Kafka，Flume才能拿到数据，Flume如果没有联系到Kafka会产生异常。
+
+### Flume的内存优化
 

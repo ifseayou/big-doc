@@ -21,7 +21,7 @@ Java连接数据库资源，为什么要释放资源，不释放行么？因为�
 * 点对点模式，一对一，消费者主动拉取数据，消息收到后，消息队列中的数据清除
 * 发布订阅模式，一对多，数据产生之后，推送给所有的消费者，消息队列中保留着数据。
 
-**在流式计算中，`kafka`一般用来做数据缓存。**
+**在流式计算中，`kafka`一般用来                                                                                                                                                                                                                                                                                                                                                                                                                                                         做数据缓存。**
 
 [`Kafka`架构和原理](<https://blog.csdn.net/qq_31807385/article/details/84977511>)
 
@@ -232,13 +232,13 @@ producer.send(record,(metadata,ex)->{
 
 ### 消费者群组和再均衡
 
-分区的所有权从一个消费者到了另外一个消费者，这样的行为叫做**再均衡**，在再均衡期间，消费者无法读取消息，会造成整个群组一小段时间的不可用。另外当分区被重新分配给另外一个消费者的时候，消费者当前的读取状态会丢失，它有可能还需要去刷新缓存，在他重新恢复状态之前会拖慢 应用程序。消费者会向被指派为**群组协调器**的broker （不同的群组有着不同的协调器）发送**心跳**来维持他们和群组的从属关系以及他们对分区的所有权关系。如果一个消费者发生了崩溃，并停止读取消息，群组协调器会等待几秒钟，（在这几秒内，死掉的消费者不会读取分区里的消息），确认它死亡了才会触发再均衡。在0.10.1版本里，Kafka社区引入了一个独立的心跳线程，可以在轮询消息的空当发送心跳。
+分区的所有权从一个消费者到了另外一个消费者，这样的行为叫做**再均衡**，在再均衡期间，消费者无法读取消息，会造成整个群组一小段时间的不可用。另外当分区被重新分配给另外一个消费者的时候，消费者当前的读取状态会丢失，它有可能还需要去刷新缓存，在他重新恢复状态之前会拖慢应用程序。消费者会向被指派为**群组协调器**的broker （不同的群组有着不同的协调器）发送**心跳**来维持他们和群组的从属关系以及他们对分区的所有权关系。如果一个消费者发生了崩溃，并停止读取消息，群组协调器会等待几秒钟，（在这几秒内，死掉的消费者不会读取分区里的消息），确认它死亡了才会触发再均衡。在0.10.1版本里，Kafka社区引入了一个独立的心跳线程，可以在轮询消息的空当发送心跳。
 
-当消费者要假如群组的时候，她会向群组协调器发送一个**`JoinGroup`**请求，第一个假如群组的消费者将会成为**“群主”** ，群主会从协调器那里获得群组的成员列表（列表中包含了所有最近发送过心跳的消费者，他们被认为是活跃的）并且负责给每个消费者分配分区，她使用一个实现了**`PartitionAssignor`** 接口的类来决定哪些分区分配给哪些消费者。分配完毕之后，群组会把分配的信息发送给协调器，协调器在发送给所有的消费者
+当消费者要加入群组的时候，她会向群组协调器发送一个**`JoinGroup`**请求，第一个加入群组的消费者将会成为**“群主”** ，群主会从协调器那里获得群组的成员列表（列表中包含了所有最近发送过心跳的消费者，他们被认为是活跃的）并且负责给每个消费者分配分区，她使用一个实现了**`PartitionAssignor`** 接口的类来决定哪些分区分配给哪些消费者。分配完毕之后，群主会把分配的信息发送给协调器，协调器在发送给所有的消费者
 
 ### 轮询
 
-**消息轮询是消费者API的核心**，通过一个简单的轮询向服务器请求出具，一旦消费者订阅了主题，轮询就会处理所有的细节，包扩群组协调，分区再均衡，发送心跳和获取数据。
+**消息轮询是消费者API的核心**，通过一个简单的轮询向服务器请求出具，一旦消费者订阅了主题，轮询就会处理所有的细节，包扩**①群组协调，②分区再均衡，③发送心跳，④获取数据。**
 
 ~~~java
 ConsumerRecords<String, String> records = consumer.poll(400); 
@@ -251,14 +251,14 @@ for (ConsumerRecord<String, String> record : records) {
     System.out.println(record.value());
 } // 在真实的场景里结果一般会保存到数据存储系统里
 
-consumer.close(); // 在退出程序之前，关闭消费者，网络连接和socket也会随之关闭，并立即出发一次再均衡，而不是等待群组协调器发现它不在发送心跳已并确认她死亡，因为那样需要更长的时间，导致整个群组在 一段时间内无法读取消息。
+consumer.close(); // 在退出程序之前，关闭消费者，网络连接和socket也会随之关闭，并立即发出一次再均衡，而不是等待群组协调器发现它不在发送心跳已并确认她死亡，因为那样需要更长的时间，导致整个群组在 一段时间内无法读取消息。
 ~~~
 
 轮询其实非常复杂的，在原地调用消费者的**poll()**方法的时候，它会负责查找**`GroupCoordinator`**，然后加入群组，接收分配的分区，如果发生了再均衡，整个期间也是在轮询期间进行的。
 
 #### 线程安全：
 
-在同一个群组里，无法使用一个线程运行多个消费者，也无法让多个线程共享一个消费者，按照规定，一个消费者使用一个线程，处理的办法是：让每个消费者运行在自己的线程里，最好是吧消费者的逻辑封装在自己的对象里，然后使用Java的**`ExecutorService`**启动多个线程，使得每个消费者运行在自己的线程里。
+在同一个群组里，无法使用一个线程运行多个消费者，也无法让多个线程共享一个消费者，按照规定，一个消费者使用一个线程，处理的办法是：让每个消费者运行在自己的线程里，最好是把消费者的逻辑封装在自己的对象里，然后使用Java的**`ExecutorService`**启动多个线程，使得每个消费者运行在自己的线程里。
 
 ### 消费者的配置
 
@@ -271,11 +271,31 @@ fetch.max.wait.ms
 
 max.partiton.fetch.bytes
 # 该属性指定了服务器从每个分区返回给消费者最大得字节数，默认1M。
+
+session.timeout.ms
+# 该属性指定了消费者在被认为死亡之前可以和服务器断开连接的时间，默认是3s。该属性的修改和heartbeat.internal.ms息息相关
+
+auto.offset.reset
+# 该属性指指定了消费者在读取一个没有偏移量的分区或者偏移量无效的情况下（因消费者长时间失效，包含偏移量的记录已经过时并被删除）该作何处理，默认为latest，消费者从最新记录开始读取数据；还有一个值是：earliest，消费者将从起始位置开始读取分区的记录。
+
+enable.auto.commit
+# 该属性指定消费者是否自动提交偏移量，默认值是true,为了尽量避免重复消费数据和丢失数据，可以将其设置为false，由自己控制什么时候提交偏移量。如果设置了true的话，还可以配置auto.commit.interval.ms属性来控制提交的频率。
+
+partition.assignment.stragegy
+ # 分区会被分配给群组里的消费者，PartitionAssignor根据给定的消费者和主题，决定给哪些分区分配哪个消费者，kafka默认有两个分配策略
 ~~~
+
+#### Range
+
+​	
+
+#### `RoundRobin`
+
+
 
 ### 提交和偏移量
 
-每个调用poll()方法，她总是返回生产者写入Kafka但还没有被消费者读取过的记录，Kafka不会像其他的JMS队列那样需要得到消费者的确认，相反，消费者可以使用Kafka来追踪消息在分区里的位置（偏移量）。我们把更新分区当前位置的操作叫做**提交 ** 。消费者如何提交偏移量呢？消费者往一个叫做**__consumer_offset** 的特殊主题发送消息，消息里包含每个分区的偏移量。如果消费者一直处于运行状态，那么偏移量就没有用处。但是一旦消费者崩溃或者有新的消费者加入群组，就会触发再均衡，然后每个消费者就能够从**__consumer_offset** 主题里获取到上一个消费者消费的位置，然后自己继续消费。
+每次调用poll()方法，她总是返回生产者写入Kafka但还没有被消费者读取过的记录，***Kafka不会像其他的JMS队列那样需要得到消费者的确认，相反，消费者可以使用Kafka来追踪消息在分区里的位置（偏移量）***。我们把更新分区当前位置的操作叫做**提交 ** 。消费者如何提交偏移量呢？消费者往一个叫做**__consumer_offset** 的特殊主题发送消息，消息里包含每个分区的偏移量。如果消费者一直处于运行状态，那么偏移量就没有用处。但是一旦消费者崩溃或者有新的消费者加入群组，就会触发再均衡，然后每个消费者就能够从**__consumer_offset** 主题里获取到上一个消费者消费的位置，然后自己继续消费。
 
 如果提交的偏移量小于客户端处理的最后一个消息的偏移量，那么处于两个偏移量之间的消息就会被重复消费，如下：![](img/kfk/15.png)
 
@@ -295,7 +315,7 @@ auto.commit.interval.ms = 5000  # 提交时间间隔
 # 如果设置了上面的两个参数，消费者会自动把poll()方法接收到的最大偏移量提交上去，自动提交也是在轮询里完成的，消费者每次在进行轮询的时候会检查是否提交该偏移量了，如果是，将上次轮询得到的偏移量提交上去。
 ~~~
 
-使用这提交方式，会带来一定的问题：假如我们使用默认的5s提交时间间隔，在最近的一次提交之后的3s发生了再均衡，再均衡之后消费者从最后一次提交的偏移量位置开始读取消息，这个时候偏移量已经落到了3s，所以在这3s内到达的消息就会被重复处理。可以通过修改提交时间间隔来更频繁的提交偏移量。
+使用这提交方式，会带来一定的问题：假如我们使用默认的5s提交时间间隔，在最近的一次提交之后的3s发生了再均衡，再均衡之后消费者从最后一次提交的偏移量位置开始读取消息，这个时候偏移量已经落到了3s，所以在这3s内到达的消息就会被重复处理（简单点的意思就是说，5s之前提交的偏移量，然后拿到了新的数据消费，消费了3s，这个时候，发生了再均衡，再次获取到当前分区的消费者会从上一次提交的位置，也即3s前重新获取数据消费）。可以通过修改提交时间间隔来更频繁的提交偏移量。
 
 在使用自动提交的时候，每次调用轮询方法都会把上一次调用返回的偏移量提交上去，他并不知道具体哪些消息被处理了，所以在再次调用之前最好确保所有当前调用返回的消息都已经处理完毕(在调用close（）方法的时候也会自动提交)，一般没有什么问题，不过在处理异常或提前提出轮询的时候要格外的小心。
 
@@ -306,9 +326,166 @@ auto.commit.interval.ms = 5000  # 提交时间间隔
 ~~~properties
 enable.auto.commit = false
 # 让应用程序决定何时提交偏移量，使用commitSync()提交偏移量最简单，也最可靠，这个API会提交由poll()方法返回的最新偏移量，提交成功马上返回，失败了爆出异常。
-
-# commitSync()将会提交由poll()返回的最新偏移量，所以在处理完所有的记录之后，要确保调用了commitSync(),否则还有丢失消息的风险，如果发生再均衡，从最近一批消息到发生再均衡之间的所有消息都将被重复处理。
 ~~~
+
+`commitSync()`将会提交由poll()返回的最新偏移量，所以在处理完所有的记录之后，要确保调用了`commitSync()`，否则还有丢失消息的风险，如果发生再均衡，从最近一批消息到发生再均衡之间的所有消息都将被重复处理。代码演示如下：
+
+~~~java
+try{
+    while( true ){
+        //拉取数据
+        ConsumerRecords<String, String> records = consumer.poll(100);
+        for (ConsumerRecord<String, String> record : records) {
+            System.out.printf("topic = %s,partition = %s,offset = %s,key = %s,value = %s\n",
+                    record.topic(),record.partition(),record.offset(),record.key(),record.value());
+        }
+        try {
+            consumer.commitSync(); // 处理完当前批次的消息，在轮询更多的消息之前，在调用该方法提交当前批次最新的消息
+        }catch (CommitFailedException e){
+            e.printStackTrace();
+        }
+    }
+}finally {
+    consumer.close();
+}
+~~~
+
+只要没有发生不可恢复的错误，`commitSync()`方法会一直尝试提交直到提交成功，如果提交失败，我们也只能将异常记录到错误日志中去。
+
+### 异步提交
+
+手动提交的时候，在broker对请求提交没有做出反应之前，应用程序会一直阻塞在那里，这样会限制应用程序的吞吐量，如果降低提交频率提升吞吐，如果发生了再均衡，会增加重复消费的数量。我们可以使用异步提交的API，直观发送提交请求，无序等待broker的响应。
+
+~~~java
+try{
+    while( true ){
+        //拉取数据
+        ConsumerRecords<String, String> records = consumer.poll(100);
+        for (ConsumerRecord<String, String> record : records) {
+            System.out.printf("topic = %s,partition = %s,offset = %s,key = %s,value = %s\n",
+                    record.topic(),record.partition(),record.offset(),record.key(),record.value());
+        }
+        consumer.commitAsync();
+    }
+}finally {
+    consumer.close();
+}
+~~~
+
+
+
+在成功提交或者碰到了无法恢复的错误之前，`commitSync`会一直进行重试，但是`commitAsync`不会，之所以不进行重试是因为她在收到了服务器的响应之后，还有可能有一个更大的偏移量需要提交，如果重试提交小的偏移量可能会覆盖大的偏移量，从而导致数据的重复消费。异步提交支持回调，回调经常用于记录提交错误或生成度量指标，在应用于重试的时候，一定要注意提交的顺序。
+
+~~~java
+while( true ){
+    //拉取数据
+    ConsumerRecords<String, String> records = consumer.poll(100);
+    for (ConsumerRecord<String, String> record : records) {
+        System.out.printf("topic = %s,partition = %s,offset = %s,key = %s,value = %s\n",
+                record.topic(),record.partition(),record.offset(),record.key(),record.value());
+    }
+//                consumer.commitAsync();
+    consumer.commitAsync((offsetAndMetadataMap,e)->{
+        if (e != null){
+            logger.error("commit failed for offsets{}",offsetAndMetadataMap,e);
+        }
+    });
+}
+~~~
+
+#### 重试异步提交
+
+我们可以使用一个单调递增的序列号来维护异步提交的顺序，在每次提交偏移量之后或在回调里提交偏移量时**递增序列号**。在进行重试之前，先检查回调的序列号和即将提交的偏移量是否相等，如果相等，说明没有新的提交，可以重试，如果序列号比较大，说明有一个新的提交已经发送出去了，应该停止重试。
+
+### 提交特定的偏移量
+
+消费者API 允许你在有调用**`commitSync和commitAsync`的时候传入希望提交的分区和偏移量的map。
+
+~~~java
+HashMap<TopicPartition, OffsetAndMetadata> currentOffsets = new HashMap<>();
+
+while(true){
+    //拉取数据
+    ConsumerRecords<String, String> records = consumer.poll(100);
+    for (ConsumerRecord<String, String> record : records) {
+        System.out.printf("topic = %s,partition = %s,offset = %s,key = %s,value = %s\n",
+                record.topic(),
+                record.partition(),
+                record.offset(),
+                record.key(),
+                record.value());
+        //  在读取每条记录之后，使用期望处理的下一个消息的偏移量来更新Map里的偏移量，下一次就从这里开始读取消息。
+        currentOffsets.put(new TopicPartition(record.topic(),record.partition()),
+                new OffsetAndMetadata(record.offset() + 1,"no metadata"));
+    }
+    // 我们决定每处理1000条消息句提交一次偏移量，在实际的开发中，你可以根据时间或者是记录的内容进行提交
+    if (count % 1000 == 0) consumer.commitAsync(currentOffsets,null);
+    count ++;
+}
+~~~
+
+### 再均衡监听器
+
+消费者在进行退出和分区再均衡之前，会做一些清理工作，在消费者失去对一个分区的所有权之前提交最后一个已经处理记录的偏移量，如果消费者准备了一个缓冲区用于处理偶发的事件，那么在失去分区所有权之前，需要处理在缓冲区所有权之前，需要处理在缓冲区积累下来的记录，你可能还需要关闭文件句柄，数据库连接等。
+
+### 从特定的偏移量开始处理记录
+
+到现在，我们已经知道了如何使用poll()方法从各个分区的最新偏移量处开始处理消息，有时候我们也需要从特定的偏移量处开始读取消息。应用程序从`kafka`读取事件，对他们进行处理，然后把结果保存到数据库，NoSQL存储引擎或者是Hadoop，假设我们不想丢失任何数据，也不想在数据库里多次保存相同的结果。
+
+~~~java
+while(true){
+    ConsumerRecords<String, String> records = consumer.poll(100);
+    for (ConsumerRecord<String, String> record : records) {
+        currentOffsets.put(new TopicPartition(record.topic(),record.partition()),
+                          new OffsetAndMetadata(record.offset() + 1);
+		processRecord(record);
+		storeRecordDB(record);
+		consumer.commitAsync(currentOffsets);
+    }
+}
+~~~
+
+在上述的例子中，每处理一个记录就提交一个偏移量，在记录被保存到数据库之后以及偏移量被提交之前，应用程序还有可能发生崩溃，导致重复处理数据，数据库里会出现重复的记录。如果保存记录和偏移量可以在 一个原子操作里完成，就可以避免上述的情况。如果是记录保存在数据库里面，而偏移量是提交到Kafka上，那么就无法实现原子操作。不过在同一事务里把记录和偏移量都写到数据库里，我们就会知道记录和偏移量要么都成功提交，要么都没有，然后重新处理记录。
+
+现在的问题是：如果偏移量是保存到了数据库里而不是Kafka里，那么消费者在得到了新分区的时候怎么知道该从哪里开始读取呢？这个时候可以使用seek方法，在消费者启动或分配到新分区时，可使用**seek()**方法查找保存到数据库里的偏移量。使用***`ConsumerRebalanceListener`*** 和***seek()***方法确保我们是从数据库里保存的偏移量所指定的位置开始处理消息的。
+
+~~~java
+public class SaveOffsetOnRebalance implements ConsumerRebalanceListener {
+    @Override
+    public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+// 提交数据库事务，大致的想法是：在处理完记录之后，将记录和偏移量插入数据库，然后在即将失去分区所有权之前提交事务，确保成功保存了这些信息
+        commmitDBTranscation();
+    }
+    @Override
+    public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+        for (TopicPartition partition : partitions) {
+// 另外一个虚构的方法，来从数据库中获取偏移量，在分配到分新分区的时候，使用seek()方法定位到那些记录
+            consumer.seek(partition,getOffsetFromDB(partition));
+        }
+    }
+}
+
+consumer.subcribe(topics,new SaveOffsetOnRebalace(consumer));
+consumer.poll(0);
+
+for(TopicPartiton partition : consumer.assiginment()){
+    // 在订阅主题之后，开始启动消费者，调用poll（）方法，让消费者加入到消费者群组里，并获取分配到的分区，马上调用seek方法定位分区的偏移量，seek方法只更新我们正在使用的位置，在下一次调用poll方法的时候就可以获得正确的小分析，如果seek发生错误，poll就抛出异常
+    consumer.seek(partiton,getOffsetFromDB(partition))
+}
+while(true){
+    ConsumerRecords<String,String> records = consumer.poll(100);
+     for (ConsumerRecord<String, String> record : records) {
+     	processRecord(record);
+        storeRecordInDB(record);
+        
+        // 另外一个虚构的方法，这次要更新的是数据库里用于保存偏移量的表，假设更新的速度非常快，所以每条记录都需要更新一次数据库，但提交的速度比较慢，所以只在每个批次末尾提交一次，这里可以用很多方式优化。
+        storeOffsetInDB(record.topic(),record.partition(),record.offset());
+     }
+    commitDBTracsaction();
+}
+~~~
+
+
 
 
 
@@ -383,6 +560,8 @@ zookeeper.connection.timeout.ms=6000
   ~~~shell
   bin/kafka-topics.sh --zookeeper hadoop101:2181 --create --replication-factor 3 --partitions 1 --topic zhbr # 该主题有一个分区，三个副本
   
+  
+  
   # 查看主题的详情：
   bin/kafka-topics.sh --zookeeper hadoop101:2181 --describe --topic zhbr
   ~~~
@@ -402,6 +581,8 @@ zookeeper.connection.timeout.ms=6000
   ~~~shell
   # Hadoop101生产：
   [isea@hadoop101 kafka]$bin/kafka-console-producer.sh --broker-list hadoop101:9092 --topic first
+  
+  bin/kafka-console-producer.sh --broker-list M1:9092 --topic redis-topic
   
   # Hadoop102消费：
   [isea@hadoop102 kafka]$ bin/kafka-console-consumer.sh --zookeeper hadoop101:2181 --from-beginning --topic first
