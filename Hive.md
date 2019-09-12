@@ -163,3 +163,83 @@ Time taken: 0.355 seconds
 
 * Hive的配置有三种方式，`hive-default.xml,hive-site.xml,command line（进队本次启动有效）`用户自定义配置会覆盖默认配置。另外，Hive也会读入Hadoop的配置，因为Hive是作为Hadoop的客户端启动的，Hive的配置会覆盖Hadoop的配置。配置文件的设定对本机启动的所有Hive进程都有效。
 
+
+
+## 系统函数
+
+### collect_set函数
+
+~~~SQL
+--1）创建原数据表
+drop table if exists stud;
+create table stud (name string, area string, course string, score int);
+--2）向原数据表中插入数据
+
+insert into table stud values('zhang3','bj','math',88);
+insert into table stud values('li4','bj','math',99);
+insert into table stud values('wang5','sh','chinese',92);
+insert into table stud values('zhao6','sh','chinese',54);
+insert into table stud values('tian7','bj','chinese',91);
+
+--3）查询表中数据
+hive (gmall)> select * from stud;
+stud.name       stud.area       stud.course     stud.score
+zhang3 bj      math    88
+li4     bj      math    99
+wang5   sh      chinese 92
+zhao6   sh      chinese 54
+tian7   bj      chinese 91
+--4）把同一分组的不同行的数据聚合成一个集合 
+hive (gmall)> select course, collect_set(area), avg(score) from stud group by course;
+chinese ["sh","bj"]     79.0
+math    ["bj"]  93.5
+--5） 用下标可以取某一个
+hive (gmall)> select course, collect_set(area)[0], avg(score) from stud group by course;
+chinese sh      79.0
+math    bj      93.5
+~~~
+
+### 日期函数
+
+#### date_format函数（根据格式整理日期）
+
+~~~SQL
+hive (gmall)> select date_format('2019-02-10','yyyy-MM');
+2019-02
+~~~
+
+
+
+#### date_add函数（加减日期）
+
+~~~SQL
+select date_add('2019-02-10',-1);
+2019-02-09
+
+select date_add('2019-02-10',1);
+2019-02-11
+~~~
+
+#### next_day函数  
+
+~~~SQL
+--（1）取当前天的下一个周一
+hive (gmall)> select next_day('2019-02-12','MO')
+2019-02-18
+--说明：星期一到星期日的英文（Monday，Tuesday、Wednesday、Thursday、Friday、Saturday、Sunday）
+
+--（2）取当前周的周一   
+hive (gmall)> select date_add(next_day('2019-02-12','MO'),-7);
+2019-02-11
+hive (gmall)> select date_add(next_day('2019-06-09','mo'),-1);
+2019-06-09
+--计算本周周日，通常用下周一减一，避免直接使用next_day(‘sunday’,’su’),如果今天是周日，会产生错误
+~~~
+
+#### 4）last_day函数（求当月最后一天日期）
+
+~~~SQL
+hive (gmall)> select last_day('2019-02-10');
+2019-02-28
+~~~
+
