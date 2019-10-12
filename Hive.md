@@ -169,6 +169,8 @@ Time taken: 0.355 seconds
 
 ### collect_set函数
 
+在Hive中还有一个函数，collect_list函数，该函数不去重。
+
 ~~~SQL
 --1）创建原数据表
 drop table if exists stud;
@@ -241,5 +243,42 @@ hive (gmall)> select date_add(next_day('2019-06-09','mo'),-1);
 ~~~SQL
 hive (gmall)> select last_day('2019-02-10');
 2019-02-28
+~~~
+
+在Hive中需要掌握的函数：
+
+add_months
+
+ceil
+
+ceiling
+
+collect_list
+
+collect_set
+
+concat
+
+concat_ws
+
+date_add
+
+date_format
+
+day
+
+dayofmonth
+
+explode
+
+
+
+get_json_object
+
+~~~SQL
+0	0	11|9|10	1.3.0|1.1.4|1.1.7|1.3.8	pt|en|es	H|C|F|S	8.2.0|8.1.3|8.0.0	MX    sumsung-19|HTC-11|sumsung-3|sumsung-9	Sumsung|HTC	V2.5.1|V2.9.6|V2.3.2|V2.2.4	N26O1Q7A@gmail.com|7CG3GN13@gmail.com|7X71PS36@gmail.com|H9982FEV@gmail.com	640*1136|750*1134|1080*1920	1567819394278|1549706258369|1549636125769|1549721035899	3G|4G|WIFI	-53.3|-92.3|-55.8|-77.9	-41.0|-8.1|22.2|21.3	2019-02-10
+
+
+
 ~~~
 

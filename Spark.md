@@ -437,7 +437,7 @@ Spark设计了非堆内存。Spark来管理这部分内存和JVM的堆内存没�
 
 ![](img/spk/39.png)
 
-但是如今，这种内存分配的方式已经不再使用了，**RDD是存放在Other中的，cache之后的数据放置在了Storage中的**，由于Other中的数据可能存在内存碎片，所以在构建cache的时候，将Other中的数据复制到Storage中的时候，有一个展开unroll的操作（有点类似于JVM中的复制算法，GC之后复制到1区）连续之后，性能就会有提升。老的版本中存储区和计算区是不能逾越的。
+但是如今，这种内存分配的方式已经不再使用了，**RDD是存放在storage中的，cache之后的数据放置在了execution中的**，由于Other中的数据可能存在内存碎片，所以在构建cache的时候，将Other中的数据复制到Storage中的时候，有一个展开unroll的操作（有点类似于JVM中的复制算法，GC之后复制到1区）连续之后，性能就会有提升。老的版本中存储区和计算区是不能逾越的。
 
 ### 动态内存管理：
 
@@ -463,7 +463,9 @@ eviction：驱逐，赶出。第二图中指的意思是执行内存的内存被
 
 `rdd.persist（StorageLevel.DISK_ONLY）`和checkpoint的区别是，前者将RDD的partition持久化到磁盘，但是该partition交给blockManager去管理，一旦driver 执行结束，也就是`CoarseGrainedExecutorBackend `结束，blockManager也就会结束，那么被cache到磁盘上的RDD也就会清空。但是checkpoint会持久化到HDFS或者是本地文件，必须要手动remove掉。
 
-由于cache数据存放在堆内存的存储内存中，即便不断电也会不安全，在cache在memory only的情况下，而且占用了计算内存，而计算内存要对内存进行回收的话，cache就会被回收掉，因此cache不能切断血缘关系。
+由于cache数据存放在内存的存储内存中，即便不断电也会不安全，在cache在memory only的情况下，而且占用了计算内存，而计算内存要对内存进行回收的话，cache就会被回收掉，因此cache不能切断血缘关系。
+
+上面的这些描述有点问题啊？
 
 ## Spark的调优策略 ：
 
