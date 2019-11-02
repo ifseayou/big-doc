@@ -1,20 +1,6 @@
-
-
-
-
-# `kafka`笔记
+# `kafka`
 
 [从单节点到分布式的演进，到Kafka](<https://blog.csdn.net/qq_31807385/article/details/84975720>)
-
-Java连接数据库资源，为什么要释放资源，不释放行么？因为在创建连接对象的时候会消耗非常大，如果你暂存资源的话性能就会收到极大的损害，所以我们用完了要马上释放那个资源，让别人可以用
-
-**RMI（Remote Method Invoke）： RPC** 该技术遵循了一个协议，就是RPC协议。
-
-以上的内容和连接的内容有关
-
-![](img/kfk/5.png)
-
-
 
 为什么会出现`Kafka`？ 
 
@@ -30,10 +16,6 @@ Java连接数据库资源，为什么要释放资源，不释放行么？因为�
 ## Kafka遇到的问题
 
 [kafka报Commit cannot be completed since the group has already rebalanced and assigned the partitions](<https://blog.csdn.net/russle/article/details/83040753>)
-
-
-
-
 
 ## Kafka压测
 
@@ -87,7 +69,7 @@ start.time, end.time, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.s
 
 **开始测试时间，测试结束数据，最大吞吐率**9.5368MB/s，平均每秒消费**2.0714MB/s**，最大每秒消费**100010条，平均每秒消费**21722.4153条。
 
-三台Kafka就能够抗住**50M/s**的数据量，能够支持每天2亿左右的数据。
+三台Kafka就能够抗住**50M/s**的数据量，能够支持每天2亿左右的数据。50M * 3600 * 24 = 4,320,000 M ；每天支持的数据量是4个T；
 
 ## Kafka权威指南
 
@@ -681,7 +663,17 @@ producer采用推（push）模式将消息发布到broker，每条消息都被�
 
 ### 副本replication
 
-保证数据的安全。没有replication的情况下，一旦broker宕机，其上所有patition 的数据都不可被消费，同时producer也不能再将数据存于其上的patition。引入replication之后，同一个partition可能会有多个replication，而这时需要在这些replication之间选出一个leader，producer和consumer只与这个leader交互，其它replication作为follower从leader 中复制数据。
+保证数据的安全。没有replication的情况下，一旦broker宕机，其上所有`patition `的数据都不可被消费，同时producer也不能再将数据存于其上的`patition`。引入replication之后，同一个partition可能会有多个replication，而这时需要在这些replication之间选出一个leader，producer和consumer只与这个leader交互，其它replication作为follower从leader 中复制数据。
+
+#### ISR
+
+Leader维护了一个动态的in-sync replica set(ISR)，**意为和leader保持同步的follower集合。**当ISR中的follower完成数据的同步之后，leader就会给producer发送`ack`。如果follower长时间未向leader同步数据，则该follower将被踢出ISR，该时间阈值由**replica.lag.time.max.ms**参数设定。**Leader发生故障之后，就会从ISR中选举新的leader。**
+
+#### LEO，HW
+
+LEO : 每个副本的最后一个offset（所面临的对象是每个副本）；HW：所有副本中的最小的LEO（所面临的对象是所有的副本）
+
+![](img/kfk/17.png)
 
 ## 数据写入流程
 
@@ -717,9 +709,9 @@ kafka读取消息的时间复杂度是O（1），无论kafka中的数据有没�
 
 ## 数据消费
 
-kafka提供了两套consumerAPI：
+`kafka`提供了两套`consumerAPI`：
 
-1. 高级ConsumerAPI
+1. 高级`ConsumerAPI`
 2. 低级Consumer API
 
 ### 高级API
@@ -1023,7 +1015,7 @@ Kafka通过zookeeper来维护集群成员的信息，在broker启动的时候通
 
 ### 控制器
 
-其实就是一个broker，复杂分区leader的选取，第一个启动的broker通过在zookeeper中创建**临时节点/controller**，其他节点启动的时候也尝试创建该节点，但是他们会收到**“节点已存在”**的异常，然后其他的broker会在控制器节点上创建zookeeper watch对象，来接收该节点变更的通知。
+其实就是一个broker，负责分区leader的选取，第一个启动的broker通过在zookeeper中创建**临时节点/controller**，其他节点启动的时候也尝试创建该节点，但是他们会收到**“节点已存在”**的异常，然后其他的broker会在控制器节点上创建zookeeper watch对象，来接收该节点变更的通知。
 
 Kafka通过zookeeper的零时节点来选举控制器，并在节点新加入或退出时通知控制器，使用epoch来避免脑裂（两个节点同时认为自己是当前的控制器）
 

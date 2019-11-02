@@ -275,12 +275,9 @@ This command was run using /opt/module/hadoop-2.7.2/share/hadoop/common/hadoop-c
 [isea@hadoop110 hadoop]$ pwd
 /opt/module/hadoop-2.7.2/etc/hadoop
 [isea@hadoop110 hadoop]$ vim hadoop-env.sh 
-[isea@hadoop110 hadoop]$ vim hadoop-env.sh 
 [isea@hadoop110 hadoop]$ vim yarn-env.sh 
-[isea@hadoop110 hadoop]$ vim hadoop-env.sh 
 [isea@hadoop110 hadoop]$ vim mapred-env.sh 
 [isea@hadoop110 hadoop]$ vim core-site.xml 
-[isea@hadoop110 hadoop]$ vim hdfs-site.xml 
 [isea@hadoop110 hadoop]$ vim hdfs-site.xml 
 [isea@hadoop110 hadoop]$ vim yarn-site.xml 
 [isea@hadoop110 hadoop]$ vim slaves
