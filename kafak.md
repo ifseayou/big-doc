@@ -554,10 +554,11 @@ zookeeper.connection.timeout.ms=6000
   ~~~shell
   bin/kafka-topics.sh --zookeeper hadoop101:2181 --create --replication-factor 3 --partitions 1 --topic zhbr # 该主题有一个分区，三个副本
   
-  
-  
   # 查看主题的详情：
   bin/kafka-topics.sh --zookeeper hadoop101:2181 --describe --topic zhbr
+  
+  # 修改分区数量，可以增加，不可以减少
+  bin/kafka-topics.sh --zookeeper M1:2181  --alter --topic seconddata-topic --partitions 3
   ~~~
 
   副本数量3，分区数量1，主题的名字zhbr
