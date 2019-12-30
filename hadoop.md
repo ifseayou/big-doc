@@ -57,8 +57,6 @@ drwxr-xr-x   - isea supergroup          0 2019-09-02 07:53 /user
 
 
 
-
-
 ## HDFS
 
 ### HDFS的组成架构
