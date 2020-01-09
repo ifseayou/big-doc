@@ -1,5 +1,18 @@
 # Zookeeper
 
+##### small questions
+
+* zookeeper的启动和停止命令
+* zookeeper中有几种节点类型，有什么区别，临时节点的创建命令
+* 监控节点值的变化使用什么？监控路径值的变化使用什么？
+* NN实现高可用的机理，如何防止脑裂？如何借用zookeeper进行自动切换？
+* 说说zookeeper实现NN高可用架构
+* paxos算法的过程
+* zookeeper的工作机制
+* zookeeper监听器的原理
+* zookeeper的leader是配置实现的么？zookeeper的选举机制
+* zookeeper如何实现写请求
+
 [官网](https://zookeeper.apache.org/)
 
 部署模式：
@@ -9,45 +22,7 @@
 
 ## Zookeeper常用的shell命令
 
-[群起zookeeper的脚本地址](<https://blog.csdn.net/qq_31807385/article/details/84975964>) 这个是自己写的，有点冗余，下面是改进之后的版本：
-
-~~~shell
-#!/bin/bash
-case $1 in
-"start"){
-   for i in hadoop104 hadoop105 hadoop106
-   do
-                 echo "----------启动$i zk----------"
-                 ssh $i "/opt/module/zookeeper-3.4.10/bin/zkServer.sh start"
-   done
-};;
-"stop"){
-   for i in hadoop104 hadoop105 hadoop106
-   do
-                echo "----------关闭$i zk----------"
-                ssh $i "/opt/module/zookeeper-3.4.10/bin/zkServer.sh stop"
-   done
-};;
-"status"){
-   for i in hadoop104 hadoop105 hadoop106
-   do
-                 echo "----------查看$i zk----------"
-                ssh $i "/opt/module/zookeeper-3.4.10/bin/zkServer.sh status"
-   done
-};;
-esac
-
-~~~
-
-以上的命令并不会起作用，因为没有读取到环境变量，有两种解决方案，第一种是手动**source**（在ssh之后）一下**`/ect/profile`** 文件，第二种方案就是配置该环境变量到当前用户的环境变量目录下，**`~/.bashrc`** 文件中
-
-~~~shell
-[isea@hadoop104 zkData]$ cat /etc/profile >> ~/.bashrc
-[isea@hadoop105 zkData]$ cat /etc/profile >> ~/.bashrc
-[isea@hadoop106 zkData]$ cat /etc/profile >> ~/.bashrc
-~~~
-
-如此一来，该脚本就能够使用了。
+[群起zookeeper的脚本地址](<https://blog.csdn.net/qq_31807385/article/details/84975964>) ：
 
 ~~~shell
 # 启动zookeeper服务器：
@@ -176,7 +151,7 @@ Created /number/one
 
 #### 问题2：数据一致（脑裂）
 
-**HDFS的NameNode的脑裂**：HDFS所有的元数据信息都存储在NameNod上，为了保证整个集群的高可用，一般会部署两个NameNode，一个NameNode做为Active，另外一个NameNode作为Standby，如果应用（Clint）或者是DataNode对于主服务器是否可用的判断不同，那么就会导致HDFS集群的混乱，例如两个应用要对HDFS进行写操作，一个认为是A可用，就将所有的信息写到的A-NameNode，另外一个认为A不可用，B可用于是将数据写到了B-NameNode，于是两个应用拿到了同样的文件路径，并且获得了写权限，于是同一个路径指向了两个不同的文件，类似这样的问题，在分布式系统中称之为**脑裂**。
+**HDFS的NameNode的脑裂**：HDFS所有的元数据信息都存储在NameNod上，为了保证整个集群的高可用，一般会部署两个NameNode，一个NameNode做为Active，另外一个NameNode作为Standby，如果应用（Client）或者是DataNode对于主服务器是否可用的判断不同，那么就会导致HDFS集群的混乱，例如两个应用要对HDFS进行写操作，一个认为是A可用，就将所有的信息写到的A-NameNode，另外一个认为A不可用，B可用于是将数据写到了B-NameNode，于是两个应用拿到了同样的文件路径，并且获得了写权限，于是同一个路径指向了两个不同的文件，类似这样的问题，在分布式系统中称之为**脑裂**。
 
 #### 解决方案
 
@@ -221,7 +196,7 @@ Zookeeper全局的数据是一致的，其数据结构和类Unix的文件系统�
 
 ## Zookeeper的工作机制
 
-Zookeeper的设计基于**观察者模式**，zookeeper集群负责存储大家都关系的数据，一旦这些数据发生了变化，zookeeper就负责通知已经在zookeeper上注册的观察者。
+Zookeeper的设计基于**观察者模式**，zookeeper集群负责存储大家都关心的数据，一旦这些数据发生了变化，zookeeper就负责通知已经在zookeeper上注册的观察者。
 
 ![](img/zk/6.png)
 
@@ -286,10 +261,3 @@ rmr    # 递归删除节点
 ### 写请求的实现
 
 ![](img/zk/10.png) 
-
-
-
-
-
-
-
